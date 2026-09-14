@@ -4,6 +4,8 @@ import {createHash} from 'node:crypto';
 async function hash(file){const h=createHash('sha256');for await(const chunk of fs.createReadStream(file))h.update(chunk);return h.digest('hex');}
 const directory = process.argv[2] ?? 'artifacts';
 const version = JSON.parse(fs.readFileSync('src-tauri/tauri.conf.json')).version;
+const cargoVersion=fs.readFileSync('src-tauri/Cargo.toml','utf8').match(/^version = "([^"]+)"/m)?.[1];
+if(JSON.parse(fs.readFileSync('package.json')).version!==version||cargoVersion!==version)throw new Error('앱과 패키지 버전이 일치하지 않습니다.');
 const platforms = {};
 for (const [platform, name] of [
     ['darwin-aarch64', `DalPDF-${version}-arm64.app.tar.gz`],
