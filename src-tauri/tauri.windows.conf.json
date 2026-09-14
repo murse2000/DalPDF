@@ -1,0 +1,13 @@
+{
+  "bundle": {
+    "resources": [
+      "pdfium-win/bin/",
+      "pdfium-win/LICENSE",
+      "pdfium-win/licenses/",
+      "../licenses/",
+      "translation/windows/",
+      "translation/windows-vulkan/",
+      "translation/model/"
+    ]
+  }
+}

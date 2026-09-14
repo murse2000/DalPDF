@@ -1,0 +1,123 @@
+[
+  {
+    "input": {
+      "sources": [
+        {
+          "id": "p1",
+          "page": 0,
+          "text": "The driver controls the motor speed using a PWM signal. The operating voltage range is 3.3 V to 5 V. The maximum current is 2 A."
+        },
+        {
+          "id": "p2",
+          "page": 1,
+          "text": "The driver shuts down when the temperature exceeds 85 C. Inspect the wiring every 30 days. The warranty lasts for 12 months from the purchase date."
+        }
+      ]
+    },
+    "kind": "overview",
+    "result": {
+      "cards": [
+        {
+          "answer": "모터 속도를 제어하는 신호는 PWM 신호입니다. 작동 전압은 3.3V에서 5V 사이이며, 최대 전류는 2A입니다.",
+          "citations": [
+            {
+              "id": "p1",
+              "quote": "The driver controls the motor speed using a PWM signal. The operating voltage range is 3.3 V to 5 V. The maximum current is 2 A."
+            }
+          ],
+          "title": "PWM 신호로 모터 속도 조절"
+        },
+        {
+          "answer": "온도가 85도를 초과할 경우 드라이버는 종료됩니다. 전선은 매 30일마다 점검해야 합니다.",
+          "citations": [
+            {
+              "id": "p2",
+              "quote": "The driver shuts down when the temperature exceeds 85 C. Inspect the wiring every 30 days. The warranty lasts for 12 months from the purchase date."
+            }
+          ],
+          "title": "온도 초과 시 종료 및 전선 점검"
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "sources": [
+        {
+          "id": "selected",
+          "page": 0,
+          "text": "A higher PWM duty cycle makes the motor rotate faster."
+        }
+      ]
+    },
+    "kind": "explain",
+    "result": {
+      "answer": "PWM의 Duty Cycle이 높을수록 모터가 더 빨리 회전하게 됩니다.",
+      "citations": [
+        {
+          "id": "selected",
+          "quote": "A higher PWM duty cycle makes the motor rotate faster."
+        }
+      ],
+      "example": "예를 들어, 조명을 더 밝게 만들고 싶다면 전원을 더 많이 공급하는 것과 비슷합니다."
+    }
+  },
+  {
+    "input": {
+      "question": "최대 전압은?",
+      "sources": [
+        {
+          "id": "p1",
+          "page": 0,
+          "text": "The driver controls the motor speed using a PWM signal. The operating voltage range is 3.3 V to 5 V. The maximum current is 2 A."
+        }
+      ]
+    },
+    "kind": "question",
+    "result": {
+      "answer": "5 V",
+      "citations": [
+        {
+          "id": "p1",
+          "quote": "The driver controls the motor speed using a PWM signal. The operating voltage range is 3.3 V to 5 V. The maximum current is 2 A."
+        }
+      ]
+    }
+  },
+  {
+    "input": {
+      "after_ids": [
+        "b1"
+      ],
+      "before_ids": [
+        "a1"
+      ],
+      "sources": [
+        {
+          "id": "a1",
+          "page": 0,
+          "text": "The operating voltage range is 3.3 V to 5 V."
+        },
+        {
+          "id": "b1",
+          "page": 1,
+          "text": "The operating voltage range is 5 V to 12 V."
+        }
+      ]
+    },
+    "kind": "compare",
+    "result": {
+      "answer": "운영 전압 범위가 3.3V에서 5V로 변경되어 5V에서 12V로 되었습니다. 이는 전압 범위가 더 높아졌음을 의미합니다. 이 변화는 기기의 작동 범위를 확장시켰다는 것을 나타냅니다.",
+      "citations": [
+        {
+          "id": "a1",
+          "quote": "The operating voltage range is 3.3 V to 5 V."
+        },
+        {
+          "id": "b1",
+          "quote": "The operating voltage range is 5 V to 12 V."
+        }
+      ]
+    }
+  }
+]

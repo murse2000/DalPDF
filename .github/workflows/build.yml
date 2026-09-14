@@ -1,0 +1,103 @@
+name: DalPDF 검증 및 릴리즈
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: node scripts/fetch-pdfium.mjs
+      - run: python scripts/fetch-translation.py
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $config = Get-Content src-tauri/tauri.windows.conf.json -Raw | ConvertFrom-Json | ConvertTo-Json -Depth 100 -Compress
+          "TAURI_CONFIG=$config" >> $env:GITHUB_ENV
+      - run: npm run check
+      - run: npm test
+      - run: npm run test:updater
+      - run: cargo clean --manifest-path src-tauri/Cargo.toml --profile dev
+      - if: runner.os == 'macOS'
+        run: |
+          test "$(uname -m)" = arm64
+          npm run app:build -- --bundles app,dmg
+          version=$(node -p 'require("./package.json").version')
+          mkdir -p artifacts
+          ditto src-tauri/target/release/bundle/macos/DalPDF.app artifacts/DalPDF.app
+          codesign --force --deep --sign - artifacts/DalPDF.app
+          codesign --verify --deep --strict artifacts/DalPDF.app
+          cp src-tauri/target/release/bundle/dmg/*.dmg "artifacts/DalPDF-$version-arm64.dmg"
+          node scripts/package-updates.mjs macos
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          npm run app:build -- --bundles nsis --config src-tauri/tauri.windows.conf.json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          node scripts/package-updates.mjs windows
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DalPDF-${{ runner.os }}
+          if-no-files-found: error
+          compression-level: 0
+          path: |
+            artifacts/DalPDF-*.dmg
+            artifacts/DalPDF-*.app.tar.gz*
+            artifacts/DalPDF-*.exe*
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: DalPDF-*
+          merge-multiple: true
+          path: artifacts
+      - name: 버전과 서명 파일 확인
+        run: |
+          node -e 'if(process.env.GITHUB_REF_NAME !== `v${require("./package.json").version}`)process.exit(1)'
+          node scripts/release-manifest.mjs
+      - name: 모든 파일 업로드 후 릴리즈 공개
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo '이미 존재하는 릴리즈는 변경하지 않습니다.'
+            exit 0
+          fi
+          gh release create "$GITHUB_REF_NAME" artifacts/* --draft --verify-tag --title "DalPDF $GITHUB_REF_NAME" --notes-file "releases/$GITHUB_REF_NAME.md"
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest

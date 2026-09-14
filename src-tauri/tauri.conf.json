@@ -1,0 +1,83 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DalPDF",
+  "version": "0.1.1",
+  "identifier": "com.dalbear.dalpdf",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:5173",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "DalPDF",
+        "width": 1320,
+        "height": 900,
+        "minWidth": 960,
+        "minHeight": 650,
+        "backgroundColor": "#0b1020"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "category": "Productivity",
+    "shortDescription": "달베어 PDF 뷰어 및 편집기",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [
+      "pdfium/lib/",
+      "pdfium/LICENSE",
+      "pdfium/licenses/",
+      "../licenses/",
+      "translation/mac/",
+      "translation/model/"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "13.3"
+    },
+    "windows": {
+      "nsis": {
+        "languages": [
+          "Korean",
+          "English"
+        ],
+        "displayLanguageSelector": true,
+        "compression": "zlib"
+      }
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "pdf"
+        ],
+        "name": "PDF Document",
+        "description": "PDF 문서",
+        "role": "Editor"
+      }
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMyQ0NERjA5ODJDMUNBNDYKUldSR3lzR0NDZC9Nd2twTTZmdko4RTBDVGVsdCtUQU9tNnRUTXlLZVFCYkdQczV3OU93WGw5d2sK",
+      "endpoints": [
+        "https://github.com/murse2000/DalPDF/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+DalPDF 내장 번역
+
+실행 엔진: llama.cpp b10809 (MIT)
+Windows CPU 및 Vulkan GPU 엔진을 함께 포함합니다. Vulkan 드라이버는 그래픽 카드 제조사에서 제공합니다.
+https://github.com/ggml-org/llama.cpp/releases/tag/b10809
+플랫폼별 엔진 폴더에 원본 LICENSE 및 포함 라이브러리 라이선스를 동봉합니다.
+
+기반 모델: Qwen/Qwen3-4B-Instruct-2507 (Apache License 2.0)
+https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507
+양자화 배포: unsloth/Qwen3-4B-Instruct-2507-GGUF, Q3_K_S
+https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF
+리비전: a06e946bb6b655725eafa393f4a9745d460374c9
+SHA256: 0ce20058cc0ed6b6c9213bb383589327e458c12ffce0842fc96867042d669c75
+원본 모델의 양자화 버전이며 DalPDF에서 추가 학습하거나 가중치를 수정하지 않았습니다.
+모델 폴더에 Apache License 2.0 전문을 동봉합니다.

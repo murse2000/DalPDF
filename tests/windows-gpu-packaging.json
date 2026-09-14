@@ -1,0 +1,72 @@
+{
+  "release": "b10809",
+  "archive_sha256": "97e50b3ef0cdd2cb4d5afd446a9006b3496bee6c0d0ba7083d32f36075771870",
+  "files": [
+    {
+      "file": "llama-server.exe",
+      "bytes": 9216,
+      "sha256": "cb29f66008d4d73cce17cab2c2569ab318eb244b0b2ca2a15024b44d90dfcd3f"
+    },
+    {
+      "file": "llama-server-impl.dll",
+      "bytes": 8896000,
+      "sha256": "5db481a019e574d3bc99d8e32ed5005bbd56771ebec69883b37733fff6c48f3d"
+    },
+    {
+      "file": "ggml-vulkan.dll",
+      "bytes": 55572992,
+      "sha256": "1de644099e17e5f67a77d4f0a1212b064bcaba2d43505fbd0d2508b08824828e"
+    },
+    {
+      "file": "ggml-base.dll",
+      "bytes": 796160,
+      "sha256": "8d8fbcafd82ab958b5b7a08a6f13139fd35b16311f2c5ab923dd5e3592d1e059"
+    },
+    {
+      "file": "ggml.dll",
+      "bytes": 79872,
+      "sha256": "ace83896f205f4bf2ecd3a31f9681867084d808ad847cd61da83efcbc6485cf8"
+    },
+    {
+      "file": "llama.dll",
+      "bytes": 3125248,
+      "sha256": "50e60280f97845b049b3d228f89b4eb233808c9b59926e5e9c6cdc686aabfc43"
+    },
+    {
+      "file": "llama-common.dll",
+      "bytes": 7798272,
+      "sha256": "e181c980342287ef5f1f4c99d888d14257e099c03fdb7fb97092350944ec9f09"
+    },
+    {
+      "file": "libomp.dll",
+      "bytes": 768000,
+      "sha256": "a12116ba72d1d6820407cf30be23da04ce79d6bb8a71a5ee71759c5a1faa6f1c"
+    },
+    {
+      "file": "LICENSE",
+      "bytes": 1078,
+      "sha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d"
+    },
+    {
+      "file": "LICENSE-LLVM-OpenMP",
+      "bytes": 19741,
+      "sha256": "fdad1758a9e1f9d5a81e18879b3406772115edc92c24bfa36b70c654f325e8e4"
+    }
+  ],
+  "vulkan_imports": [
+    "ggml-base.dll",
+    "vulkan-1.dll",
+    "MSVCP140.dll",
+    "VCRUNTIME140.dll",
+    "VCRUNTIME140_1.dll",
+    "api-ms-win-crt-runtime-l1-1-0.dll",
+    "api-ms-win-crt-stdio-l1-1-0.dll",
+    "api-ms-win-crt-heap-l1-1-0.dll",
+    "api-ms-win-crt-convert-l1-1-0.dll",
+    "api-ms-win-crt-environment-l1-1-0.dll",
+    "api-ms-win-crt-math-l1-1-0.dll",
+    "api-ms-win-crt-string-l1-1-0.dll",
+    "KERNEL32.dll"
+  ],
+  "windows_gpu_runtime_verified": false
+}

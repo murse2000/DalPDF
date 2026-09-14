@@ -1,0 +1,37 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "이 문서는 당신의 컴퓨터에 남아 있습니다. 인터넷 연결 없이 문장이나 문장 단위를 선택하여 번역할 수 있습니다."
+      }
+    }
+  ],
+  "created": 1789233366,
+  "model": "src-tauri/translation/model/model.gguf",
+  "system_fingerprint": "b10809-5266f24da",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 34,
+    "prompt_tokens": 53,
+    "total_tokens": 87,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    }
+  },
+  "id": "chatcmpl-UiGkDWNdZSmdwNlctS89GaN5A776ESPV",
+  "timings": {
+    "cache_n": 0,
+    "prompt_n": 53,
+    "prompt_ms": 264.991,
+    "prompt_per_token_ms": 4.999830188679245,
+    "prompt_per_second": 200.0067926835251,
+    "predicted_n": 34,
+    "predicted_ms": 700.315,
+    "predicted_per_token_ms": 21.221666666666668,
+    "predicted_per_second": 47.121652399277465
+  },
+  "elapsed_seconds": 0.9766678810119629
+}

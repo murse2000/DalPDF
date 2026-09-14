@@ -1,0 +1,23 @@
+[
+  {
+    "block": 29,
+    "source": "GPIOs\r\n",
+    "finish_reason": "length",
+    "length": 14336,
+    "output_prefix": "GPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPIO  \nGPI"
+  },
+  {
+    "block": 28,
+    "source": "T\r\n",
+    "finish_reason": "stop",
+    "length": 1,
+    "output_prefix": "T"
+  },
+  {
+    "block": 25,
+    "source": "V",
+    "finish_reason": "stop",
+    "length": 2,
+    "output_prefix": "브이"
+  }
+]
