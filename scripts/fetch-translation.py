@@ -8,6 +8,8 @@ import tarfile
 import tempfile
 import zipfile
 
+sys.stdout.reconfigure(encoding='utf-8')
+
 root = pathlib.Path(__file__).resolve().parents[1] / 'src-tauri' / 'translation'
 platform = sys.argv[1] if len(sys.argv) > 1 else ('windows' if sys.platform == 'win32' else 'mac')
 assets = {
