@@ -24,3 +24,6 @@ strip = true
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]
+
+[dev-dependencies]
+minisign-verify = "0.2.5"

@@ -64,4 +64,19 @@ mod tests{
         assert!(gate.enter(false).is_err());assert!(gate.enter(true).is_err());drop(install);
         assert!(gate.enter(false).is_ok());assert!(gate.enter(true).is_ok());
     }
+    #[test]
+    #[ignore="DALPDF_UPDATE_ARTIFACT로 실제 배포 파일을 지정합니다."]
+    fn signed_release_accepts_original_and_rejects_tampering(){
+        use base64::Engine;
+        use minisign_verify::{PublicKey,Signature};
+        let config:serde_json::Value=serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let decode=|text:&str|String::from_utf8(base64::engine::general_purpose::STANDARD.decode(text.trim()).unwrap()).unwrap();
+        let public=PublicKey::decode(&decode(config["plugins"]["updater"]["pubkey"].as_str().unwrap())).unwrap();
+        let path=std::env::var("DALPDF_UPDATE_ARTIFACT").unwrap();
+        let signature=Signature::decode(&decode(&std::fs::read_to_string(format!("{path}.sig")).unwrap())).unwrap();
+        let mut bytes=std::fs::read(path).unwrap();
+        public.verify(&bytes,&signature,true).unwrap();
+        bytes[0]^=1;
+        assert!(public.verify(&bytes,&signature,true).is_err());
+    }
 }

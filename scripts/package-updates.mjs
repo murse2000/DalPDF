@@ -12,7 +12,8 @@ let output;
 if (platform === 'macos') {
     output = `artifacts/DalPDF-${version}-arm64.app.tar.gz`;
     // 최종 앱 서명이 포함된 번들을 묶은 뒤 업데이트 서명을 생성합니다.
-    execFileSync('tar', ['-czf', output, '-C', 'artifacts', 'DalPDF.app'], {env:{...environment, COPYFILE_DISABLE:'1'}});
+    const app=process.argv[3] ?? 'artifacts/DalPDF.app';
+    execFileSync('tar', ['-czf', output, '-C', path.dirname(app), path.basename(app)], {env:{...environment, COPYFILE_DISABLE:'1'}});
 } else if (platform === 'windows') {
     output = `artifacts/DalPDF-${version}-x64-setup.exe`;
     fs.copyFileSync(process.argv[3] ?? `src-tauri/target/release/bundle/nsis/DalPDF_${version}_x64-setup.exe`, output);
