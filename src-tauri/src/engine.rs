@@ -349,7 +349,7 @@ pub fn handle<'a>(
                         color.blue()
                     ))
                 };
-                chars.push(json!({"text":value,"color":color,"box":[a.0.min(b.0) as f32 / 10000., a.1.min(b.1) as f32 / pixel_height,
+                chars.push(json!({"text":value,"color":color,"size":c.scaled_font_size().value,"box":[a.0.min(b.0) as f32 / 10000., a.1.min(b.1) as f32 / pixel_height,
                     (a.0-b.0).abs() as f32 / 10000., (a.1-b.1).abs() as f32 / pixel_height]}));
             }
             Ok(json!({"chars":chars}))

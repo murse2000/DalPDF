@@ -7,9 +7,10 @@ import './style.css';
 import {createAssistant} from './assistant';
 import {accelerationPanel} from './acceleration';
 import {initializeUpdater} from './updater';
-import { activePage } from './geometry';
+import { activePage, wheelZoom } from './geometry';
+import { resizePage } from './page-view';
 import { layoutTranslation, type TranslationLine } from './translation-layout';
-import { textOf, unitRange, paragraphRanges, rangeBox, type TextChar, type PageText } from './text-selection';
+import { textOf, translationText, unitRange, paragraphRanges, rangeBox, type TextChar, type PageText } from './text-selection';
 
 type PageSize = { width: number; height: number };
 type Doc = { path: string; pages: PageSize[]; undo: boolean; redo: boolean; revision: number; editable: boolean };
@@ -58,7 +59,7 @@ $('app').innerHTML = `
  <section id="welcome"><div class="eyebrow">A LITTLE BEAR. A BETTER WORKFLOW.</div><h1>문서를 읽고,<br><em>생각을 이어가세요.</em></h1><p>가볍게 펼치고, 필요한 만큼 편집하세요.<br>PDF를 위한 조용하고 편안한 작업 공간.</p><img class="hero" src="/dalpdf-icon.png" alt="달베어 PDF"><button id="welcome-open" class="primary">${icon('plus')} PDF 열기</button><small>또는 PDF 파일을 이곳에 놓아 주세요</small><div class="features"><article>${icon('scroll-text')}<strong>자연스러운 읽기</strong><span>페이지를 이어 보는 연속 스크롤</span></article><article>${icon('text-cursor-input')}<strong>원본 내용 편집</strong><span>텍스트와 이미지 개체 수정</span></article><article>${icon('layers-2')}<strong>간편한 페이지 정리</strong><span>필요한 부분만 쪼개고 합치기</span></article></div></section>
  <div id="toolbar" hidden><form id="search-form">${icon('search')}<input id="search" placeholder="문서에서 찾기" aria-label="문서에서 찾기"><button title="다음 검색 결과">${icon('arrow-down')}</button></form><div class="zoom">${tool('zoom-out','minus','축소','class="icon-only"')}<button id="zoom-value">100%</button>${tool('zoom-in','plus','확대','class="icon-only"')}${tool('fit','scan','너비 맞춤','class="icon-only"')}</div>${tool('translate-panel','languages','번역')}${tool('assistant-panel','sparkles','문서 도우미')}<div id="translation-views" hidden><button id="show-original" aria-pressed="true">원문 보기</button><button id="show-translated" aria-pressed="false">번역문 보기</button></div><span id="mode-label">연속 스크롤</span></div>
  <div id="workspace" hidden><div id="viewport" tabindex="0" aria-label="PDF 문서"><div id="pages"></div></div><aside id="inspector" hidden><div class="inspector-head"><strong>내용 편집</strong>${tool('close-edit','x','편집 닫기','class="icon-only"')}</div><p class="hint">문서의 텍스트나 이미지를 선택하세요.</p>${tool('add-image','image-plus','이미지 추가')}<div id="object-list"></div><div id="properties"></div></aside><aside id="translation" hidden><div class="inspector-head"><strong>기기 내 번역</strong>${tool('close-translation','x','번역 닫기','class="icon-only"')}</div><p class="hint">문서에서 드래그하거나 문장·문단을 눌러 선택하세요.</p><label>선택 단위<select id="selection-unit"><option value="drag">드래그</option><option value="sentence">문장</option><option value="paragraph">문단</option></select></label><label>번역 언어<select id="translation-language"><option>한국어</option><option>English</option><option>日本語</option><option>简体中文</option></select></label>${tool('translate-selected','text-select','선택 내용 번역','disabled')}${tool('explain-selected','sparkles','선택 내용 쉽게 설명','disabled')}${tool('open-glossary','book-a','번역 용어집·교정')}${tool('translate-page','languages','현재 페이지 번역')}${tool('translate-document','files','문서 전체 번역')}${tool('translate-remaining','play','남은 페이지 이어서 번역','hidden')}${tool('save-translation','download','번역 PDF 저장','disabled')}<details id="translation-typography"><summary>번역문 글꼴·크기</summary><label>글꼴<select id="translation-font"><option value="gothic">Noto Sans KR · 고딕체</option><option value="serif">Noto Serif KR · 명조체</option></select></label><label>글자 크기<select id="translation-size-mode"><option value="auto">문단에 자동 맞춤</option><option value="manual">직접 지정</option></select></label><label>크기 (pt)<input id="translation-font-size" type="number" min="6" max="72" step="1" value="12" disabled></label></details><p id="translation-source-label" class="hint">선택한 내용이 없습니다.</p><details><summary>번역 원문</summary><pre id="translation-source"></pre></details><p id="translation-status" role="status"></p><button id="cancel-translation" hidden>번역 취소</button><details id="translation-errors" hidden><summary>번역하지 못한 페이지</summary><pre id="translation-error-list"></pre></details><pre id="translation-result" aria-label="번역 결과"></pre></aside></div>
- <footer id="statusbar"><button id="check-update">업데이트 확인</button><span id="status">문서를 열어 시작하세요.</span><span id="page-status">DalPDF · 0.1.1</span></footer>
+ <footer id="statusbar"><button id="check-update">업데이트 확인</button><span id="status">문서를 열어 시작하세요.</span><span id="page-status">DalPDF · 0.1.2</span></footer>
 </main>
 <div id="toast" role="status"></div><div id="busy" hidden><div class="spinner"></div><span id="busy-label">처리 중…</span></div><div id="drop" hidden>${icon('file-plus-2')}PDF를 놓아 주세요</div>
 <dialog id="split-dialog"><form method="dialog"><h2>PDF 쪼개기</h2><p>새 PDF로 저장할 페이지를 입력하세요.</p><label>페이지 범위<input id="range" placeholder="예: 1-3, 5, 8-10" required></label><small>입력한 순서대로 추출합니다. 원본은 유지됩니다.</small><div class="dialog-actions"><button value="cancel">취소</button><button id="extract" type="button" class="primary">추출하여 저장</button></div></form></dialog>`;
@@ -143,9 +144,11 @@ function pageStatus() {
  const start = Math.max(0,current-3), end = Math.min(doc.pages.length,start+9);
  for(let i=start;i<end;i++) { const b=document.createElement('button'); b.textContent=`${i+1} 페이지`;b.className=i===current?'page-link active':'page-link';b.onclick=()=>go(i);list.append(b); }
 }
-function layout() {
+function layout(preserve=false) {
  if (!doc) return;
- generation++; mounted.clear(); $('pages').replaceChildren(); offsets=[]; widths=[]; heights=[];
+ generation++;
+ if(!preserve){mounted.clear();$('pages').replaceChildren();}
+ offsets=[]; widths=[]; heights=[];
  const available = Math.max(250, $('viewport').clientWidth-72);
  const base = Math.max(...doc.pages.slice(0,30).map(p=>p.width));
  const scale = fit ? available/base : zoom;
@@ -153,6 +156,7 @@ function layout() {
  let y=28, maxWidth=0;
  for(const p of doc.pages) { offsets.push(y);widths.push(p.width*scale);heights.push(p.height*scale);y+=p.height*scale+18;maxWidth=Math.max(maxWidth,p.width*scale); }
  $('pages').style.height=`${y+12}px`; $('pages').style.width=`${Math.max(available+72,maxWidth+72)}px`;
+ if(preserve)for(const [n,el] of mounted)resizePage(el,offsets[n],widths[n],heights[n]);
  schedule();
 }
 function visibleRange() {
@@ -186,10 +190,17 @@ async function draw() {
    if(gen!==generation)break;
    cache.set(key,data);while(cache.size>8 || (cache.size>1 && [...cache.values()].reduce((n,s)=>n+s.length*2,0)>64*1024*1024))cache.delete(cache.keys().next().value!);
    const img=document.createElement('img');img.alt=`${n+1}페이지`;img.draggable=false;img.src=data;
-   el.replaceChildren(img);el.dataset.key=key;
+   const surface=document.createElement('div');surface.className='page-render';surface.append(img);el.append(surface);
+   try{
+    await img.decode();
+    if(gen!==generation)break;
+    if(translatedView&&translations.has(n))await translatedLayer(n,surface,img,width,gen);
+    else if(translationOpen)await textLayer(n,surface,gen);
+    await img.decode();
+    if(gen!==generation)break;
+    el.replaceChildren(...surface.childNodes);el.dataset.key=key;
+   }finally{surface.remove();}
    if(editing&&n===objectPage)overlay();
-   if(translatedView&&translations.has(n))await translatedLayer(n,el,img,width,gen);
-   else if(translationOpen)await textLayer(n,el,gen);
    evidenceLayer(n,el);
    const range=visibleRange();if(n<range.first-1||n>range.last+1){schedule();break;}
   }
@@ -259,13 +270,35 @@ $('extract').onclick=async()=>{if(!doc)return;const pages=$<HTMLInputElement>('r
 $('merge').onclick=async()=>{const paths=await open({multiple:true,filters:[{name:'PDF',extensions:['pdf']}]});if(Array.isArray(paths)&&paths.length)await mutate({op:'merge',paths});};
 $('jump-form').onsubmit=e=>{e.preventDefault();go(Number($<HTMLInputElement>('jump').value)-1);};
 $('search-form').onsubmit=async e=>{e.preventDefault();await task('문서에서 찾는 중…',async()=>{const result=await api<{page:number}|null>({op:'search',query:$<HTMLInputElement>('search').value,start:current+1});if(result)go(result.page);else toast('검색 결과가 없습니다.');});};
-function scale(delta:number){if(!doc)return;if(fit)zoom=widths[current]/doc.pages[current].width;fit=false;zoom=Math.max(0.25,Math.min(3,zoom+delta));layout();go(current);}
-$('zoom-in').onclick=()=>scale(.15);$('zoom-out').onclick=()=>scale(-.15);$('fit').onclick=()=>{fit=true;layout();go(current);};
+function scale(delta:number){if(!doc)return;const viewport=$('viewport');zoomAt(Math.max(.25,Math.min(3,widths[current]/doc.pages[current].width+delta)),viewport.clientWidth/2,viewport.clientHeight/2);}
+$('zoom-in').onclick=()=>scale(.15);$('zoom-out').onclick=()=>scale(-.15);$('fit').onclick=()=>{fit=true;layout(true);go(current);};
 $('viewport').onscroll=schedule;
+function zoomAt(next:number,x:number,y:number){
+ if(!doc)return;
+ const viewport=$('viewport'),pages=$('pages'),documentY=viewport.scrollTop+y;
+ let page=offsets.findIndex((top,n)=>top+heights[n]>=documentY);
+ if(page<0)page=offsets.length-1;
+ const previous=widths[page]/doc.pages[page].width;
+ if(next===previous)return;
+ // 마우스 아래의 PDF 좌표를 확대 전후 같은 화면 위치에 유지합니다.
+ const anchorX=(viewport.scrollLeft+x-pages.clientWidth/2)/previous;
+ const anchorY=(documentY-offsets[page])/previous;
+ fit=false;zoom=next;layout(true);
+ viewport.scrollLeft=pages.clientWidth/2+anchorX*next-x;
+ viewport.scrollTop=offsets[page]+anchorY*next-y;
+ schedule();
+}
+$('viewport').addEventListener('wheel',e=>{
+ if(!e.ctrlKey||!doc)return;
+ e.preventDefault();
+ if(busy||!e.deltaY)return;
+ const viewport=$('viewport'),rect=viewport.getBoundingClientRect();
+ zoomAt(wheelZoom(widths[current]/doc.pages[current].width,e.deltaY,e.deltaMode,viewport.clientHeight),e.clientX-rect.left,e.clientY-rect.top);
+},{passive:false});
 new ResizeObserver(()=>{
  if(!doc||!heights[current])return;
  const relative=($('viewport').scrollTop-offsets[current])/heights[current];
- layout();$('viewport').scrollTop=offsets[current]+relative*heights[current];schedule();
+ layout(true);$('viewport').scrollTop=offsets[current]+relative*heights[current];schedule();
 }).observe($('viewport'));
 window.addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey){if(e.key==='o'){e.preventDefault();void pickPDF();}if(e.key==='s'){e.preventDefault();void savePDF();}if(e.key==='f'&&doc){e.preventDefault();$('search').focus();}if(e.key==='z'&&doc&&!(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement)){e.preventDefault();void mutate({op:e.shiftKey?'redo':'undo'});}}});
 getCurrentWindow().onDragDropEvent(e=>{if(e.payload.type==='over'||e.payload.type==='enter')$('drop').hidden=false;else $('drop').hidden=true;if(e.payload.type==='drop'){const path=e.payload.paths.find(p=>p.toLowerCase().endsWith('.pdf'));if(path)void pickPDF(path);}});
@@ -386,9 +419,9 @@ async function startTranslation(scope:boolean|'all'|'remaining'){
    $('translation-status').textContent=translationProgressPrefix+'내장 번역 모델 준비 중…';
    const data=await pageText(page);
    if(job!==translationJob)return;
-   const ranges=scope?paragraphRanges(data.chars):[selectionRange];
+   const ranges=scope?paragraphRanges(data.chars):paragraphRanges(data.chars.slice(...selectionRange)).map(([a,b])=>[a+selectionRange[0],b+selectionRange[0]] as [number,number]);
    const blocks=ranges.map(([start,end])=>({chars:data.chars.slice(start,end),text:''}));
-   const sources=blocks.map(b=>textOf(b.chars));
+   const sources=blocks.map(b=>translationText(b.chars));
    const source=sources.join('\n\n');
    if(!source.trim()){
     if(entire){skipped++;skippedTranslationPages.add(page);continue;}

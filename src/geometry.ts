@@ -8,3 +8,9 @@ export function activePage(offsets: number[], heights: number[], top: number, vi
   }
   return active;
 }
+
+// 휠의 픽셀·줄·페이지 단위를 맞추고 한 번의 급격한 확대를 제한합니다.
+export function wheelZoom(scale: number, delta: number, mode: number, viewportHeight: number): number {
+  const pixels = delta * (mode === 1 ? 16 : mode === 2 ? viewportHeight : 1);
+  return Math.max(0.25, Math.min(3, scale * Math.exp(-Math.max(-100, Math.min(100, pixels)) * 0.002)));
+}

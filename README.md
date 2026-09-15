@@ -29,8 +29,8 @@ DalZip의 곰·초승달 브랜드와 남색 유리 질감을 적용한 Windows/
 ## 실행 파일
 
 - `artifacts/DalPDF.app`: macOS Apple Silicon 실행 앱
-- `artifacts/DalPDF-0.1.1-arm64.dmg`: macOS 설치 이미지
-- `artifacts/DalPDF-0.1.1-x64-setup.exe`: Windows x64 설치 파일
+- `artifacts/DalPDF-0.1.2-arm64.dmg`: macOS 설치 이미지
+- `artifacts/DalPDF-0.1.2-x64-setup.exe`: Windows x64 설치 파일
 - `artifacts/SHA256SUMS`: 설치 파일 해시
 
 Windows 버전은 macOS에서 교차 빌드했습니다. 실제 Windows 기기에서 설치·실행·편집 검증은 아직 하지 못했습니다. 배포용 Apple 공증 및 Windows 코드 서명은 적용하지 않았습니다.

@@ -30,8 +30,12 @@ export function layoutTranslation(chars:TextChar[],text:string,page:{width:numbe
   const lines=rows.map((text,i)=>({text,x:left,y:top+ascent+i*lineHeight,width:context.measureText(text).width}));
   return {size:fontSize,ascent,lineHeight,lines,overflow:rows.length*lineHeight>height+.01||lines.some(l=>l.width>width+.01)};
  };
- if(size!==null)return atSize(size);
- let low=.1,high=Math.max(...chars.map(c=>c.box[3]))*page.height;
+ // 원본 크기 또는 지정 크기를 상한으로 두고 영역을 넘을 때만 줄입니다.
+ const visible=chars.filter(c=>c.text.trim());
+ const sizes=visible.map(c=>c.size&&c.size>0?c.size:c.box[3]*page.height).sort((a,b)=>a-b);
+ const limit=size??sizes[Math.floor(sizes.length/2)]??12;
+ if(!atSize(limit).overflow)return atSize(limit);
+ let low=.1,high=limit;
  for(let i=0;i<14;i++){const mid=(low+high)/2;if(atSize(mid).overflow)high=mid;else low=mid;}
  return atSize(low);
 }
