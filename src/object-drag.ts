@@ -7,7 +7,7 @@ export function imageDragPosition(x:number,y:number,dx:number,dy:number,rotation
   default:return {x:x+dx,y:y-dy};
  }
 }
-export function bindImageDrag(button:HTMLElement,page:HTMLElement,start:()=>boolean,commit:(dx:number,dy:number)=>void){
+export function bindImageDrag(button:HTMLElement,page:HTMLElement,start:()=>boolean,commit:(dx:number,dy:number)=>void,preview:HTMLElement=button){
  let drag:{id:number;x:number;y:number;clientX:number;clientY:number;moved:boolean}|null=null;
  let suppressClick=false;
  button.style.touchAction='none';button.style.cursor='grab';
@@ -15,7 +15,7 @@ export function bindImageDrag(button:HTMLElement,page:HTMLElement,start:()=>bool
   const rect=page.getBoundingClientRect();
   return {x:(e.clientX-rect.left)/rect.width-drag!.x,y:(e.clientY-rect.top)/rect.height-drag!.y,rect};
  };
- const cancel=()=>{drag=null;button.style.transform='';button.style.cursor='grab';};
+ const cancel=()=>{drag=null;preview.style.transform='';button.style.cursor='grab';};
  button.addEventListener('pointerdown',e=>{
   if(e.button!==0||!e.isPrimary||!start())return;
   const rect=page.getBoundingClientRect();
@@ -26,7 +26,7 @@ export function bindImageDrag(button:HTMLElement,page:HTMLElement,start:()=>bool
   if(!drag||drag.id!==e.pointerId)return;
   if(!drag.moved&&Math.hypot(e.clientX-drag.clientX,e.clientY-drag.clientY)<3)return;
   drag.moved=true;const d=delta(e);button.style.cursor='grabbing';
-  button.style.transform=`translate(${d.x*d.rect.width}px,${d.y*d.rect.height}px)`;
+  preview.style.transform=`translate(${d.x*d.rect.width}px,${d.y*d.rect.height}px)`;
  });
  button.addEventListener('pointerup',e=>{
   if(!drag||drag.id!==e.pointerId)return;

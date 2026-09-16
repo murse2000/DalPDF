@@ -4,12 +4,12 @@ SilentInstall silent
 Name "DalPDF 설치 잠금 회귀 테스트"
 OutFile "${OUTPUT}"
 !ifdef LIGHT
-  !include "../src-tauri/installer-light-hooks.nsh"
+  !include "${__FILEDIR__}\..\src-tauri\installer-light-hooks.nsh"
   !if "${DALPDF_MODEL_SHA256}" != "${EXPECTED_MODEL_SHA256}"
     !error "모델 해시가 설치 훅에서 다르게 읽혔습니다."
   !endif
 !else
-  !include "../src-tauri/installer-hooks.nsh"
+  !include "${__FILEDIR__}\..\src-tauri\installer-hooks.nsh"
 !endif
 !define MAINBINARYNAME "dalpdf"
 Section

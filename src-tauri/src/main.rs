@@ -5,12 +5,24 @@ mod translation;
 mod updater;
 mod model_store;
 mod default_app;
+mod assistant_export;
+mod printing;
+#[cfg(target_os="macos")]
+mod printing_macos;
+#[cfg(target_os="windows")]
+mod printing_windows;
 use std::sync::{mpsc, Mutex};
 #[cfg(target_os = "macos")]
 use tauri::Emitter;
 use tauri::Manager;
 type Reply = std::result::Result<serde_json::Value, String>;
-struct Job(engine::Request, mpsc::Sender<Reply>);
+enum Job {
+    Pdf(engine::Request,mpsc::Sender<Reply>), Export(assistant_export::Request,mpsc::Sender<Reply>),
+    #[cfg(target_os="windows")]
+    PrintInfo(std::path::PathBuf,mpsc::Sender<Reply>),
+    #[cfg(target_os="windows")]
+    Print(std::path::PathBuf,printing_windows::Settings,mpsc::Sender<Reply>),
+}
 struct Worker(mpsc::Sender<Job>);
 struct PendingFile(Mutex<Option<String>>);
 #[tauri::command]
@@ -24,13 +36,23 @@ async fn pdf(app:tauri::AppHandle, request: engine::Request, state: tauri::State
     tauri::async_runtime::spawn_blocking(move || {
         let (tx, rx) = mpsc::channel();
         sender
-            .send(Job(request, tx))
+            .send(Job::Pdf(request, tx))
             .map_err(|_| "PDF 작업기가 종료되었습니다.".to_string())?;
         rx.recv()
             .map_err(|_| "PDF 응답을 받지 못했습니다.".to_string())?
     })
     .await
     .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn export_overview(app:tauri::AppHandle,request:assistant_export::Request,state:tauri::State<'_,Worker>)->Reply {
+    let _guard=updater::begin_work(&app)?;
+    let sender=state.0.clone();
+    tauri::async_runtime::spawn_blocking(move||{
+        let (tx,rx)=mpsc::channel();
+        sender.send(Job::Export(request,tx)).map_err(|_|"PDF 작업기가 종료되었습니다.".to_string())?;
+        rx.recv().map_err(|_|"내보내기 응답을 받지 못했습니다.".to_string())?
+    }).await.map_err(|e|e.to_string())?
 }
 fn main() {
     tauri::Builder::default()
@@ -60,10 +82,14 @@ fn main() {
                 .spawn(move || {
                     let engine = engine::bind(&engine::library_path(&base));
                     let mut session = None;
-                    for Job(request, reply) in rx {
-                        let result = match &engine {
-                            Ok(pdfium) => engine::handle(pdfium, &mut session, request),
-                            Err(e) => Err(format!("PDF 엔진을 불러오지 못했습니다: {e}")),
+                    for job in rx {
+                        let (result,reply) = match job {
+                            Job::Pdf(request,reply)=>(match &engine {Ok(pdfium)=>engine::handle(pdfium,&mut session,request),Err(e)=>Err(format!("PDF 엔진을 불러오지 못했습니다: {e}"))},reply),
+                            Job::Export(request,reply)=>(match &engine {Ok(pdfium)=>assistant_export::export(pdfium,request),Err(e)=>Err(format!("PDF 엔진을 불러오지 못했습니다: {e}"))},reply),
+                            #[cfg(target_os="windows")]
+                            Job::PrintInfo(path,reply)=>(match &engine {Ok(pdfium)=>printing_windows::inspect(pdfium,&path),Err(e)=>Err(e.clone())},reply),
+                            #[cfg(target_os="windows")]
+                            Job::Print(path,settings,reply)=>(match &engine {Ok(pdfium)=>printing_windows::print(pdfium,&path,settings),Err(e)=>Err(e.clone())},reply),
                         };
                         let _ = reply.send(result);
                     }
@@ -78,6 +104,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             pdf,
+            export_overview,
+            printing::print_document,
             pending_file,
             updater::check_update,
             updater::install_update,

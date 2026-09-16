@@ -31522,6 +31522,11 @@ License: Zlib OR Apache-2.0 OR MIT
 Source: https://github.com/madsmtm/objc2
 
 
+objc2-pdf-kit 0.3.2
+License: Zlib OR Apache-2.0 OR MIT
+Source: https://github.com/madsmtm/objc2
+
+
 objc2-quartz-core 0.3.2
 License: Zlib OR Apache-2.0 OR MIT
 Source: https://github.com/madsmtm/objc2

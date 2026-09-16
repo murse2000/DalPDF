@@ -35,6 +35,12 @@ pub enum Request {
     Objects {
         page: i32,
     },
+    Annotations { page: i32 },
+    AddHighlight { page: i32, boxes: Vec<[f32; 4]>, color: [u8; 3] },
+    AddNote { page: i32, x: f32, y: f32, text: String },
+    EditAnnotation { page: i32, index: usize, text: String },
+    MoveAnnotation { page: i32, index: usize, x: f32, y: f32 },
+    DeleteAnnotation { page: i32, index: usize },
     Text {
         page: i32,
         index: usize,
@@ -73,6 +79,7 @@ pub enum Request {
     Save {
         path: String,
     },
+    PrintSnapshot { path: String },
     SaveTranslation {
         path: String,
         font: String,
@@ -121,6 +128,17 @@ pub struct Session<'a> {
 
 pub fn bind(path: &Path) -> Result<Pdfium> {
     Ok(Pdfium::new(Pdfium::bind_to_library(path).map_err(err)?))
+}
+
+#[cfg(test)]
+pub(crate) fn test_pdfium() -> Pdfium {
+    static INITIALIZE: std::sync::Once = std::sync::Once::new();
+    // 테스트 프로세스에서 실제 번들 라이브러리를 한 번 확인하고 기존 바인딩을 공유합니다.
+    INITIALIZE.call_once(|| {
+        bind(&library_path(Path::new(env!("CARGO_MANIFEST_DIR"))))
+            .expect("테스트용 PDFium 라이브러리를 불러오지 못했습니다.");
+    });
+    Pdfium::default()
 }
 
 fn snapshot(doc: &PdfDocument) -> Result<tempfile::NamedTempFile> {
@@ -354,6 +372,26 @@ pub fn handle<'a>(
             }
             Ok(json!({"chars":chars}))
         }
+        Request::Annotations { page } => {
+            let page = s.doc.pages().get(page).map_err(err)?;
+            let mut annotations = Vec::new();
+            for index in page.annotations().as_range() {
+                let annotation = page.annotations().get(index).map_err(err)?;
+                let kind = match annotation.annotation_type() {
+                    PdfPageAnnotationType::Highlight => "highlight",
+                    PdfPageAnnotationType::Text => "note",
+                    _ => continue,
+                };
+                let display = annotation_display(&page, annotation.bounds().map_err(err)?)?;
+                let mut boxes = Vec::new();
+                for quad in annotation.attachment_points().iter() {
+                    boxes.push(annotation_display(&page, quad.to_rect())?);
+                }
+                annotations.push(json!({"index":index,"kind":kind,"text":annotation.contents().unwrap_or_default(),
+                    "display":display,"boxes":boxes}));
+            }
+            Ok(json!({"annotations":annotations}))
+        }
         Request::Objects { page } => {
             let page = s.doc.pages().get(page).map_err(err)?;
             let mut result = Vec::new();
@@ -391,6 +429,18 @@ pub fn handle<'a>(
         Request::SaveTranslation { path, font, pages } => {
             save_translation(pdfium, s, &path, &font, &pages)?;
             Ok(json!(true))
+        }
+        Request::PrintSnapshot { path } => {
+            let permissions = s.doc.permissions();
+            if !permissions.can_print_high_quality().map_err(err)? && !permissions.can_print_only_low_quality().map_err(err)? {
+                return Err("이 PDF는 인쇄가 허용되지 않습니다.".into());
+            }
+            let target = Path::new(&path);
+            if target == Path::new(&s.path) || target.canonicalize().ok().zip(Path::new(&s.path).canonicalize().ok()).is_some_and(|(a,b)| a==b) {
+                return Err("인쇄용 사본은 원본과 다른 경로여야 합니다.".into());
+            }
+            save_atomic(pdfium, &s.doc, &path)?;
+            Ok(json!({"saved":true}))
         }
         Request::Save { path } => {
             save_atomic(pdfium, &s.doc, &path)?;
@@ -451,12 +501,14 @@ pub fn handle<'a>(
             Ok(Value::Null)
         }
         req => {
-            if !s
-                .doc
-                .permissions()
-                .can_modify_document_content()
-                .map_err(err)?
-            {
+            let annotation_edit = matches!(&req, Request::AddHighlight { .. } | Request::AddNote { .. }
+                | Request::EditAnnotation { .. } | Request::MoveAnnotation { .. } | Request::DeleteAnnotation { .. });
+            let allowed = if annotation_edit {
+                s.doc.permissions().can_add_or_modify_text_annotations()
+            } else {
+                s.doc.permissions().can_modify_document_content()
+            }.map_err(err)?;
+            if !allowed {
                 return Err("문서의 내용 수정 권한이 없습니다.".into());
             }
             let before = snapshot(&s.doc)?;
@@ -480,6 +532,30 @@ pub fn handle<'a>(
             }
         }
     }
+}
+
+// UI 정규화 좌표와 PDF 좌표는 PDFium 변환을 사용하여 회전 페이지도 동일하게 처리합니다.
+fn annotation_bounds(page: &PdfPage, display: [f32; 4]) -> Result<PdfRect> {
+    let [x,y,w,h] = display;
+    if !display.iter().all(|v| v.is_finite()) || x<0. || y<0. || w<=0. || h<=0. || x+w>1.001 || y+h>1.001 {
+        return Err("주석 위치와 크기를 확인하세요.".into());
+    }
+    let config = PdfRenderConfig::new().set_target_width(10000);
+    let height = (10000. * page.height().value / page.width().value).round();
+    let a = page.pixels_to_points((x*10000.).round() as i32,(y*height).round() as i32,&config).map_err(err)?;
+    let b = page.pixels_to_points(((x+w)*10000.).round() as i32,((y+h)*height).round() as i32,&config).map_err(err)?;
+    Ok(PdfRect::new_from_values(a.1.value.min(b.1.value),a.0.value.min(b.0.value),a.1.value.max(b.1.value),a.0.value.max(b.0.value)))
+}
+fn annotation_display(page: &PdfPage, bounds: PdfRect) -> Result<[f32;4]> {
+    let config = PdfRenderConfig::new().set_target_width(10000);
+    let height = (10000. * page.height().value / page.width().value).round();
+    let a = page.points_to_pixels(bounds.left(),bounds.top(),&config).map_err(err)?;
+    let b = page.points_to_pixels(bounds.right(),bounds.bottom(),&config).map_err(err)?;
+    Ok([a.0.min(b.0) as f32/10000.,a.1.min(b.1) as f32/height,(a.0-b.0).abs() as f32/10000.,(a.1-b.1).abs() as f32/height])
+}
+fn editable_annotation(annotation: &PdfPageAnnotation) -> Result<()> {
+    if matches!(annotation.annotation_type(), PdfPageAnnotationType::Text | PdfPageAnnotationType::Highlight) { Ok(()) }
+    else { Err("형광펜과 메모만 수정할 수 있습니다.".into()) }
 }
 
 fn save_translation(
@@ -662,7 +738,12 @@ fn mutate(pdfium: &Pdfium, doc: &mut PdfDocument, req: Request) -> Result<()> {
         | Request::Transform { page, .. }
         | Request::RotateImage { page, .. }
         | Request::CropImage { page, .. }
-        | Request::Delete { page, .. } => *page,
+        | Request::Delete { page, .. }
+        | Request::AddHighlight { page, .. }
+        | Request::AddNote { page, .. }
+        | Request::EditAnnotation { page, .. }
+        | Request::MoveAnnotation { page, .. }
+        | Request::DeleteAnnotation { page, .. } => *page,
         _ => return Err("지원하지 않는 편집 명령입니다.".into()),
     };
     let replacement_font = if let Request::Text {
@@ -678,8 +759,63 @@ fn mutate(pdfium: &Pdfium, doc: &mut PdfDocument, req: Request) -> Result<()> {
     } else {
         None
     };
+    if let Request::DeleteAnnotation { index, .. } = &req {
+        // 조회 페이지를 삭제 핸들보다 오래 유지하여 주석 핸들의 수명을 보장합니다.
+        let source = doc.pages().get(p).map_err(err)?;
+        let annotation = source.annotations().get(*index).map_err(err)?;
+        editable_annotation(&annotation)?;
+        let mut target = doc.pages().get(p).map_err(err)?;
+        target.annotations_mut().delete_annotation(annotation).map_err(err)?;
+        return Ok(());
+    }
     let mut page = doc.pages().get(p).map_err(err)?;
     match req {
+        Request::AddHighlight { boxes, color, .. } => {
+            if boxes.is_empty() { return Err("형광펜을 표시할 텍스트를 선택하세요.".into()); }
+            let bounds = boxes.into_iter().map(|b| annotation_bounds(&page, b)).collect::<Result<Vec<_>>>()?;
+            let union = PdfRect::new_from_values(
+                bounds.iter().map(|b| b.bottom().value).fold(f32::INFINITY, f32::min),
+                bounds.iter().map(|b| b.left().value).fold(f32::INFINITY, f32::min),
+                bounds.iter().map(|b| b.top().value).fold(f32::NEG_INFINITY, f32::max),
+                bounds.iter().map(|b| b.right().value).fold(f32::NEG_INFINITY, f32::max));
+            let mut annotation = page.annotations_mut().create_highlight_annotation().map_err(err)?;
+            annotation.set_bounds(union).map_err(err)?;
+            annotation.set_stroke_color(PdfColor::new(color[0],color[1],color[2],100)).map_err(err)?;
+            annotation.set_is_printed(true).map_err(err)?;
+            for bound in bounds {
+                // 텍스트 마크업 QuadPoints는 위쪽 두 점, 아래쪽 두 점의 Z 순서입니다.
+                let quad = PdfQuadPoints::new_from_values(bound.left().value,bound.top().value,
+                    bound.right().value,bound.top().value,bound.left().value,bound.bottom().value,
+                    bound.right().value,bound.bottom().value);
+                annotation.attachment_points_mut().create_attachment_point_at_end(quad).map_err(err)?;
+            }
+        }
+        Request::AddNote { x, y, text, .. } => {
+            if !x.is_finite() || !y.is_finite() { return Err("메모 위치를 확인하세요.".into()); }
+            if text.trim().is_empty() { return Err("메모 내용을 입력하세요.".into()); }
+            let width = 20. / page.width().value;
+            let height = 20. / page.height().value;
+            let bounds = annotation_bounds(&page, [x.clamp(0.,1.-width),y.clamp(0.,1.-height),width,height])?;
+            let mut annotation = page.annotations_mut().create_text_annotation(&text).map_err(err)?;
+            annotation.set_bounds(bounds).map_err(err)?;
+            annotation.set_stroke_color(PdfColor::YELLOW).map_err(err)?;
+            annotation.set_is_printed(true).map_err(err)?;
+        }
+        Request::EditAnnotation { index, text, .. } => {
+            // 기존 주석의 외관 스트림과 색상은 유지하고 내용만 변경합니다.
+            let mut annotation = page.annotations().get(index).map_err(err)?;
+            editable_annotation(&annotation)?;
+            annotation.set_contents(&text).map_err(err)?;
+        }
+        Request::MoveAnnotation { index, x, y, .. } => {
+            if !x.is_finite() || !y.is_finite() { return Err("메모 위치를 확인하세요.".into()); }
+            let mut annotation = page.annotations().get(index).map_err(err)?;
+            if annotation.annotation_type()!=PdfPageAnnotationType::Text { return Err("메모만 이동할 수 있습니다.".into()); }
+            let display = annotation_display(&page, annotation.bounds().map_err(err)?)?;
+            let bounds = annotation_bounds(&page, [x.clamp(0.,(1.-display[2]).max(0.)), y.clamp(0.,(1.-display[3]).max(0.)), display[2], display[3]])?;
+            annotation.set_bounds(bounds).map_err(err)?;
+        }
+
         Request::Text { index, text, .. } => {
             if text.trim().is_empty() {
                 return Err("텍스트를 비우려면 개체 삭제를 사용하세요.".into());
@@ -901,7 +1037,7 @@ mod tests {
     #[ignore = "실제 문서는 DALPDF_TEST_PDF로 지정합니다."]
     fn real_document_translation() {
         let path = std::env::var("DALPDF_TEST_PDF").unwrap();
-        let pdfium = bind(&library_path(Path::new(env!("CARGO_MANIFEST_DIR")))).unwrap();
+        let pdfium = test_pdfium();
         let mut state = None;
         handle(
             &pdfium,
@@ -1084,8 +1220,79 @@ mod tests {
         }
     }
     #[test]
+    fn annotations_save_move_undo_and_rotated_coordinates() {
+        let dir = tempfile::tempdir().unwrap();
+        let pdfium = test_pdfium();
+        for rotation in [PdfPageRenderRotation::None, PdfPageRenderRotation::Degrees90,
+            PdfPageRenderRotation::Degrees180, PdfPageRenderRotation::Degrees270] {
+            let input = dir.path().join("annotations-source.pdf");
+            fixture(&pdfium, &input, 1);
+            {
+                let document = pdfium.load_pdf_from_file(&input, None).unwrap();
+                document.pages().get(0).unwrap().set_rotation(rotation);
+                document.save_to_file(&dir.path().join("rotated.pdf")).unwrap();
+            }
+            let mut state = None;
+            handle(&pdfium, &mut state, Request::Open {path:dir.path().join("rotated.pdf").to_string_lossy().into(),password:None}).unwrap();
+            let before = handle(&pdfium, &mut state, Request::Render {page:0,width:600}).unwrap();
+            let original_objects = handle(&pdfium, &mut state, Request::Objects {page:0}).unwrap();
+            let boxes = vec![[0.1,0.2,0.3,0.025],[0.1,0.24,0.2,0.025]];
+            handle(&pdfium, &mut state, Request::AddHighlight {page:0,boxes:boxes.clone(),color:[255,220,0]}).unwrap();
+            let highlighted = handle(&pdfium, &mut state, Request::Render {page:0,width:600}).unwrap();
+            let image = image::load_from_memory(&STANDARD.decode(highlighted.as_str().unwrap().split(',').nth(1).unwrap()).unwrap()).unwrap().to_rgb8();
+            assert!(image.pixels().filter(|p| p[0]>150 && p[1]>120 && p[2]<p[0]-20).count()>500);
+            handle(&pdfium, &mut state, Request::AddNote {page:0,x:0.6,y:0.4,text:"첫 메모".into()}).unwrap();
+            let result = handle(&pdfium, &mut state, Request::Annotations {page:0}).unwrap();
+            assert_eq!(result["annotations"][0]["kind"], "highlight");
+            assert_eq!(result["annotations"][1]["text"], "첫 메모");
+            for (n, expected) in boxes.iter().enumerate() {
+                for (axis, value) in expected.iter().enumerate() {
+                    assert!((result["annotations"][0]["boxes"][n][axis].as_f64().unwrap()-*value as f64).abs()<0.0003);
+                }
+            }
+            let rendered = handle(&pdfium, &mut state, Request::Render {page:0,width:600}).unwrap();
+            assert_ne!(rendered,before);
+            handle(&pdfium, &mut state, Request::EditAnnotation {page:0,index:1,text:"수정한 메모".into()}).unwrap();
+            assert_eq!(handle(&pdfium, &mut state, Request::Render {page:0,width:600}).unwrap(),rendered);
+            let undo_count = state.as_ref().unwrap().undo.len();
+            handle(&pdfium, &mut state, Request::MoveAnnotation {page:0,index:1,x:0.3,y:0.7}).unwrap();
+            assert_eq!(state.as_ref().unwrap().undo.len(),undo_count+1);
+            let moved = handle(&pdfium, &mut state, Request::Annotations {page:0}).unwrap();
+            assert_eq!(moved["annotations"][1]["text"],"수정한 메모");
+            assert!((moved["annotations"][1]["display"][0].as_f64().unwrap()-0.3).abs()<0.0003);
+            assert!((moved["annotations"][1]["display"][1].as_f64().unwrap()-0.7).abs()<0.0003);
+            handle(&pdfium, &mut state, Request::Undo).unwrap();
+            let undone = handle(&pdfium, &mut state, Request::Annotations {page:0}).unwrap();
+            assert!((undone["annotations"][1]["display"][0].as_f64().unwrap()-0.6).abs()<0.0003);
+            handle(&pdfium, &mut state, Request::Redo).unwrap();
+            let session_before = info(state.as_ref().unwrap()).unwrap();
+            let print_path = dir.path().join("print-snapshot.pdf");
+            handle(&pdfium, &mut state, Request::PrintSnapshot {path:print_path.to_string_lossy().into()}).unwrap();
+            assert_eq!(info(state.as_ref().unwrap()).unwrap(),session_before);
+            let printed = pdfium.load_pdf_from_file(&print_path,None).unwrap();
+            assert_eq!(printed.pages().get(0).unwrap().annotations().len(),2);
+            let source_path = state.as_ref().unwrap().path.clone();
+            assert!(handle(&pdfium,&mut state,Request::PrintSnapshot {path:source_path}).is_err());
+            let output = dir.path().join("annotations-saved.pdf");
+            handle(&pdfium, &mut state, Request::Save {path:output.to_string_lossy().into()}).unwrap();
+            handle(&pdfium, &mut state, Request::Open {path:output.to_string_lossy().into(),password:None}).unwrap();
+            let reopened = handle(&pdfium, &mut state, Request::Annotations {page:0}).unwrap();
+            assert_eq!(reopened,moved);
+            assert_eq!(handle(&pdfium, &mut state, Request::Objects {page:0}).unwrap(),original_objects);
+            let before_edit = handle(&pdfium, &mut state, Request::Render {page:0,width:600}).unwrap();
+            handle(&pdfium, &mut state, Request::EditAnnotation {page:0,index:0,text:"선택한 내용".into()}).unwrap();
+            assert_eq!(handle(&pdfium, &mut state, Request::Render {page:0,width:600}).unwrap(),before_edit);
+            handle(&pdfium, &mut state, Request::DeleteAnnotation {page:0,index:1}).unwrap();
+            let remaining = handle(&pdfium, &mut state, Request::Annotations {page:0}).unwrap();
+            assert_eq!(remaining["annotations"].as_array().unwrap().len(),1);
+            assert_eq!(remaining["annotations"][0]["text"],"선택한 내용");
+            assert!(handle(&pdfium,&mut state,Request::AddHighlight {page:0,boxes:vec![],color:[0,0,0]}).is_err());
+
+        }
+    }
+    #[test]
     fn original_objects_save_undo_merge_extract_and_render() {
-        let pdfium = bind(&library_path(Path::new(env!("CARGO_MANIFEST_DIR")))).unwrap();
+        let pdfium = test_pdfium();
         generated_line_breaks_keep_text_without_requesting_color(&pdfium);
         let dir = tempfile::tempdir().unwrap();
         let input = dir.path().join("input.pdf");
@@ -1420,7 +1627,7 @@ mod tests {
     #[test]
     #[ignore = "대용량 성능 측정은 release 모드에서 별도로 실행합니다."]
     fn large_document_measurement() {
-        let pdfium = bind(&library_path(Path::new(env!("CARGO_MANIFEST_DIR")))).unwrap();
+        let pdfium = test_pdfium();
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/large.pdf");
         if !path.exists() {
             let mut d = pdfium.create_new_pdf().unwrap();

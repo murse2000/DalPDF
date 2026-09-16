@@ -12,6 +12,9 @@ import { activePage, wheelZoom, documentLayout } from './geometry';
 import { resizePage } from './page-view';
 import { bindImageDrag, imageDragPosition } from './object-drag';
 import { Thumbnails } from './thumbnails';
+import { annotationTools } from './annotations';
+import { EditHistory } from './edit-history';
+import { printAction, isPrintShortcut } from './printing';
 import { layoutTranslation, type TranslationLine } from './translation-layout';
 import { textOf, translationText, unitRange, paragraphRanges, rangeBox, type TextChar, type PageText } from './text-selection';
 
@@ -25,6 +28,7 @@ let doc: Doc | null = null, current = 0, zoom = 1, fit = true, editing = false, 
 let selected: Obj | null = null, objects: Obj[] = [], objectPage = -1, objectRotation = 'None';
 let offsets: number[] = [], widths: number[] = [], heights: number[] = [];
 const mounted = new Map<number, HTMLElement>();
+const editHistory=new EditHistory();
 const cache = new Map<string, string>();
 let drawing = false, scheduled = false, redraw = false;
 let translationOpen=false, translationJob=0, translating=false, activeTranslationJob=0;
@@ -57,9 +61,9 @@ $('app').innerHTML = `
 
 </aside>
 <main>
- <header>${tool('sidebar-toggle','panel-left-close','사이드바 숨기기','class="icon-only" aria-expanded="true" aria-controls="sidebar"')}<div class="document-name"><span id="filename"></span><small id="filemeta"></small></div><div class="header-actions">${tool('undo','undo-2','실행 취소','disabled class="icon-only"')}${tool('redo','redo-2','다시 실행','disabled class="icon-only"')}${tool('save','save','다른 이름으로 저장','disabled class="save"')}</div></header>
+ <header>${tool('sidebar-toggle','panel-left-close','사이드바 숨기기','class="icon-only" aria-expanded="true" aria-controls="sidebar"')}<div class="document-name"><span id="filename"></span><small id="filemeta"></small></div><div class="header-actions">${tool('undo','undo-2','실행 취소','disabled class="icon-only"')}${tool('redo','redo-2','다시 실행','disabled class="icon-only"')}${tool('save','save','다른 이름으로 저장','disabled class="save"')}${tool('print','printer','인쇄','disabled class="icon-only"')}</div></header>
  <section id="welcome"><div class="eyebrow">A LITTLE BEAR. A BETTER WORKFLOW.</div><h1>문서를 읽고,<br><em>생각을 이어가세요.</em></h1><p>가볍게 펼치고, 필요한 만큼 편집하세요.<br>PDF를 위한 조용하고 편안한 작업 공간.</p><img class="hero" src="/dalpdf-icon.png" alt="달베어 PDF"><button id="welcome-open" class="primary">${icon('plus')} PDF 열기</button><small>또는 PDF 파일을 이곳에 놓아 주세요</small><div class="features"><article>${icon('scroll-text')}<strong>자연스러운 읽기</strong><span>페이지를 이어 보는 연속 스크롤</span></article><article>${icon('text-cursor-input')}<strong>원본 내용 편집</strong><span>텍스트와 이미지 개체 수정</span></article><article>${icon('layers-2')}<strong>간편한 페이지 정리</strong><span>필요한 부분만 쪼개고 합치기</span></article></div></section>
- <div id="toolbar" hidden><form id="search-form">${icon('search')}<input id="search" placeholder="문서에서 찾기" aria-label="문서에서 찾기"><button title="다음 검색 결과">${icon('arrow-down')}</button></form><div class="zoom">${tool('zoom-out','minus','축소','class="icon-only"')}<button id="zoom-value">100%</button>${tool('zoom-in','plus','확대','class="icon-only"')}${tool('fit','scan','너비 맞춤','class="icon-only"')}</div>${tool('translate-panel','languages','번역')}${tool('assistant-panel','sparkles','문서 도우미')}<div id="translation-views" hidden><button id="show-original" aria-pressed="true">원문 보기</button><button id="show-translated" aria-pressed="false">번역문 보기</button></div><span id="mode-label">연속 스크롤</span></div>
+ <div id="toolbar" hidden><form id="search-form">${icon('search')}<input id="search" placeholder="문서에서 찾기" aria-label="문서에서 찾기"><button title="다음 검색 결과">${icon('arrow-down')}</button></form><div class="zoom">${tool('zoom-out','minus','축소','class="icon-only"')}<button id="zoom-value">100%</button>${tool('zoom-in','plus','확대','class="icon-only"')}${tool('fit','scan','너비 맞춤','class="icon-only"')}</div>${tool('highlight','highlighter','형광펜','aria-pressed="false"')}${tool('add-note','sticky-note','메모','aria-pressed="false"')}${tool('translate-panel','languages','번역')}${tool('assistant-panel','sparkles','문서 도우미')}<div id="translation-views" hidden><button id="show-original" aria-pressed="true">원문 보기</button><button id="show-translated" aria-pressed="false">번역문 보기</button></div><span id="mode-label">연속 스크롤</span></div>
  <div id="workspace" hidden><div id="viewport" tabindex="0" aria-label="PDF 문서"><div id="pages"></div></div><aside id="inspector" hidden><div class="inspector-head"><strong>내용 편집</strong>${tool('close-edit','x','편집 닫기','class="icon-only"')}</div><p class="hint">문서의 텍스트나 이미지를 선택하세요.</p>${tool('add-image','image-plus','이미지 추가')}<div id="object-list"></div><div id="properties"></div></aside><aside id="translation" hidden><div class="inspector-head"><strong>기기 내 번역</strong>${tool('close-translation','x','번역 닫기','class="icon-only"')}</div><p class="hint">문서에서 드래그하거나 문장·문단을 눌러 선택하세요.</p><label>선택 단위<select id="selection-unit"><option value="drag">드래그</option><option value="sentence">문장</option><option value="paragraph">문단</option></select></label><label>번역 언어<select id="translation-language"><option>한국어</option><option>English</option><option>日本語</option><option>简体中文</option></select></label>${tool('translate-selected','text-select','선택 내용 번역','disabled')}${tool('explain-selected','sparkles','선택 내용 쉽게 설명','disabled')}${tool('open-glossary','book-a','번역 용어집·교정')}${tool('translate-page','languages','현재 페이지 번역')}${tool('translate-document','files','문서 전체 번역')}${tool('translate-remaining','play','남은 페이지 이어서 번역','hidden')}${tool('save-translation','download','번역 PDF 저장','disabled')}<details id="translation-typography"><summary>번역문 글꼴·크기</summary><label>글꼴<select id="translation-font"><option value="gothic">Noto Sans KR · 고딕체</option><option value="serif">Noto Serif KR · 명조체</option></select></label><label>글자 크기<select id="translation-size-mode"><option value="auto">문단에 자동 맞춤</option><option value="manual">직접 지정</option></select></label><label>크기 (pt)<input id="translation-font-size" type="number" min="6" max="72" step="1" value="12" disabled></label></details><p id="translation-source-label" class="hint">선택한 내용이 없습니다.</p><details><summary>번역 원문</summary><pre id="translation-source"></pre></details><p id="translation-status" role="status"></p><button id="cancel-translation" hidden>번역 취소</button><details id="translation-errors" hidden><summary>번역하지 못한 페이지</summary><pre id="translation-error-list"></pre></details><pre id="translation-result" aria-label="번역 결과"></pre></aside></div>
  <footer id="statusbar"><div class="status-left"><button id="check-update">업데이트 확인</button><span id="status">문서를 열어 시작하세요.</span></div><form id="jump-form" aria-label="페이지 이동"><button id="previous-page" type="button" title="이전 페이지" disabled>${icon('chevron-left')}</button><input id="jump" type="number" min="1" value="1" aria-label="이동할 페이지" disabled><span id="count">/ —</span><button id="next-page" type="button" title="다음 페이지" disabled>${icon('chevron-right')}</button></form><span id="page-status">DalPDF · 0.1.3</span></footer>
 </main>
@@ -69,9 +73,15 @@ createIcons({ icons });
 accelerationPanel(document.getElementById('translation')!);
 const api = <T>(request: Record<string, unknown>): Promise<T> => invoke<T>('pdf', { request });
 const thumbnails=new Thumbnails($('page-list'),page=>api<string>({op:'render',page,width:120}),go,()=>!drawing&&!scheduled&&!busy&&!$('app').classList.contains('sidebar-collapsed'));
+const annotations=annotationTools({
+ api,identity:()=>doc,editable:()=>Boolean(doc?.editable),occupied:()=>busy||translating||assistant.running,
+ enter:async()=>{assistant.close();closeTranslation();translatedView=false;viewControls();await mode(false);chosenText='';chosenPage=-1;window.getSelection()?.removeAllRanges();layout();},
+ mutate:async request=>Boolean(await mutate(request)),
+ selection:async()=>{if(translatedView||chosenPage<0||!chosenText.trim()||window.getSelection()?.isCollapsed)return null;const page=chosenPage,data=await pageText(page);return {page,chars:data.chars.slice(...chosenRange)};},toast,
+});
 const assistant=createAssistant({
  api,document:()=>doc,selection:()=>({page:chosenPage,text:chosenText}),
- show:async()=>{if(editing)await mode(false);closeTranslation();layout();go(current);},
+ show:async()=>{annotations.reset();if(editing)await mode(false);closeTranslation();layout();go(current);},
  hide:()=>{layout();go(current);},
  select:()=>{translatedView=false;viewControls();void mode(false).then(()=>{translationOpen=true;$('translation').hidden=false;layout();go(current);});},
  evidence:showEvidence,
@@ -121,7 +131,7 @@ async function pickPDF(path?: string) {
  if (typeof choice !== 'string') return;
  await task('PDF를 여는 중…', async () => {
   const result = await api<Doc>({op:'open',path:choice});
-  resetTranslation(); doc = result; current = 0; dirty = false; editing = false; selected = null; objectPage = -1; objectRotation = 'None'; cache.clear();
+  resetTranslation(); annotations.resetDocument(); editHistory.reset(); doc = result; current = 0; dirty = false; editing = false; selected = null; objectPage = -1; objectRotation = 'None'; cache.clear();
   $('welcome').hidden = true; $('workspace').hidden = false; $('toolbar').hidden = false; $('inspector').hidden = true;
   $('viewport').scrollTop = 0; update(); layout(); await draw();
  });
@@ -131,8 +141,9 @@ function update() {
  $('filename').textContent = doc.path.split(/[\\/]/).pop()! + (dirty ? ' •' : '');
  $('filemeta').textContent = `${doc.pages.length.toLocaleString()}페이지 · ${doc.editable ? '원본 개체 편집 가능' : '읽기 전용'}`;
  getCurrentWindow().setTitle(`${dirty ? '• ' : ''}${doc.path.split(/[\\/]/).pop()} — DalPDF`).catch(()=>{});
- for (const id of ['save','split','merge','jump']) ($<HTMLButtonElement>(id)).disabled = false;
+ for (const id of ['save','print','split','merge','jump']) ($<HTMLButtonElement>(id)).disabled = false;
  $<HTMLButtonElement>('edit').disabled = !doc.editable;
+ $<HTMLButtonElement>('highlight').disabled=!doc.editable;$<HTMLButtonElement>('add-note').disabled=!doc.editable;
  $<HTMLButtonElement>('undo').disabled = !doc.undo; $<HTMLButtonElement>('redo').disabled = !doc.redo;
  $('count').textContent = `/ ${doc.pages.length}`; $<HTMLInputElement>('jump').max = String(doc.pages.length);
  $('edit').classList.toggle('active',editing); $('read').classList.toggle('active',!editing);
@@ -196,7 +207,8 @@ async function draw() {
     await img.decode();
     if(gen!==generation)break;
     if(translatedView&&translations.has(n))await translatedLayer(n,surface,img,width,gen);
-    else if(translationOpen)await textLayer(n,surface,gen);
+    else if(translationOpen||annotations.mode==='highlight')await textLayer(n,surface,gen);
+    if(!editing&&!translatedView)await annotations.layer(n,surface,()=>gen===generation);
     await img.decode();
     if(gen!==generation)break;
     el.replaceChildren(...surface.childNodes);el.dataset.key=key;
@@ -260,13 +272,13 @@ function select(o:Obj,refreshOverlay=true){
  $('delete-object').onclick=()=>mutate({op:'delete',page:objectPage,index:o.index});
 }
 async function mutate(request:Record<string,unknown>){
- await task('PDF 내용을 적용하는 중…',async()=>{
-  const updated=await api<Doc>(request);resetTranslation();doc=updated;dirty=true;cache.clear();update();const scroll=$('viewport').scrollTop;layout();$('viewport').scrollTop=scroll;await draw();if(editing)await loadObjects();
+ return await task('PDF 내용을 적용하는 중…',async()=>{
+  const updated=await api<Doc>(request);if(!editHistory.commit(String(request.op)))resetTranslation();doc=updated;dirty=true;cache.clear();update();const scroll=$('viewport').scrollTop;layout();$('viewport').scrollTop=scroll;await draw();if(editing)await loadObjects();return true;
  });
 }
 async function chooseImage(index?:number){const path=await open({filters:[{name:'이미지',extensions:['png','jpg','jpeg','webp']}],multiple:false});if(typeof path==='string')await mutate({op:'image',page:current,index:index??null,path});}
-async function mode(value:boolean){if(value){assistant.close();closeTranslation();translatedView=false;viewControls();}editing=value;selected=null;$('inspector').hidden=!value;update();layout();go(current);if(value)await loadObjects();}
-async function savePDF(){if(!doc)return;const path=await save({defaultPath:doc.path.replace(/\.pdf$/i,'-편집.pdf'),filters:[{name:'PDF',extensions:['pdf']}]});if(path)await task('PDF를 저장하고 확인하는 중…',async()=>{doc=await api<Doc>({op:'save',path});dirty=false;update();toast('PDF를 저장했습니다.');});}
+async function mode(value:boolean){annotations.reset();if(value){assistant.close();closeTranslation();translatedView=false;viewControls();}editing=value;selected=null;$('inspector').hidden=!value;update();layout();go(current);if(value)await loadObjects();}
+async function savePDF(){if(!doc)return;const path=await save({defaultPath:doc.path.replace(/\.pdf$/i,'-편집.pdf'),filters:[{name:'PDF',extensions:['pdf']}]});if(path)await task('PDF를 저장하고 확인하는 중…',async()=>{doc=await api<Doc>({op:'save',path});dirty=false;update();layout();await draw();toast('PDF를 저장했습니다.');});}
 $('sidebar-toggle').onclick=()=>{
  const hidden=$('app').classList.toggle('sidebar-collapsed');
  const button=$('sidebar-toggle');
@@ -276,6 +288,13 @@ $('sidebar-toggle').onclick=()=>{
  createIcons({icons});if(!hidden)thumbnails.schedule();
 };
 $('open').onclick=()=>pickPDF();$('welcome-open').onclick=()=>pickPDF();$('read').onclick=()=>mode(false);$('edit').onclick=()=>mode(true);$('close-edit').onclick=()=>mode(false);
+const printDocument=printAction({
+ available:()=>Boolean(doc),occupied:()=>busy||translating||assistant.running,
+ lock:value=>{busy=value;$('app').inert=value;$('busy').hidden=!value;if(value)$('busy-label').textContent='인쇄 대화상자를 준비하는 중…';else thumbnails.schedule();},
+ request:async()=>({current_page:current,translation:translatedView?await translationPayload():null}),
+ print:request=>invoke<boolean>('print_document',{request}),notify:toast,
+});
+$('print').onclick=printDocument;
 $('save').onclick=savePDF;$('undo').onclick=()=>mutate({op:'undo'});$('redo').onclick=()=>mutate({op:'redo'});
 $('add-image').onclick=()=>chooseImage();
 $('split').onclick=()=>{$<HTMLInputElement>('range').value=String(current+1);$<HTMLDialogElement>('split-dialog').showModal();};
@@ -314,7 +333,7 @@ new ResizeObserver(()=>{
  const relative=($('viewport').scrollTop-offsets[current])/heights[current];
  layout(true);$('viewport').scrollTop=offsets[current]+relative*heights[current];schedule();
 }).observe($('viewport'));
-window.addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey){if(e.key==='o'){e.preventDefault();void pickPDF();}if(e.key==='s'){e.preventDefault();void savePDF();}if(e.key==='f'&&doc){e.preventDefault();$('search').focus();}if(e.key==='z'&&doc&&!(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement)){e.preventDefault();void mutate({op:e.shiftKey?'redo':'undo'});}}});
+window.addEventListener('keydown',e=>{if(isPrintShortcut(e)){e.preventDefault();void printDocument();return;}if(busy){if(e.metaKey||e.ctrlKey)e.preventDefault();return;}if(e.metaKey||e.ctrlKey){if(e.key==='o'){e.preventDefault();void pickPDF();}if(e.key==='s'){e.preventDefault();void savePDF();}if(e.key==='f'&&doc){e.preventDefault();$('search').focus();}if(e.key==='z'&&doc&&!(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement)){e.preventDefault();void mutate({op:e.shiftKey?'redo':'undo'});}}});
 getCurrentWindow().onDragDropEvent(e=>{if(e.payload.type==='over'||e.payload.type==='enter')$('drop').hidden=false;else $('drop').hidden=true;if(e.payload.type==='drop'){const path=e.payload.paths.find(p=>p.toLowerCase().endsWith('.pdf'));if(path)void pickPDF(path);}});
 getCurrentWindow().onCloseRequested(async e=>{if(busy){e.preventDefault();return;}if(dirty){e.preventDefault();if(await ask('저장하지 않은 변경 사항을 버리고 종료할까요?',{title:'DalPDF',kind:'warning'}))await getCurrentWindow().destroy();}});
 window.addEventListener('unhandledrejection',e=>{e.preventDefault();void message(String(e.reason),{title:'DalPDF',kind:'error'});});
@@ -362,7 +381,7 @@ async function pageText(page:number){
 async function textLayer(page:number,el:HTMLElement,gen:number){
  try{
   const data=await pageText(page);
-  if(gen!==generation||!translationOpen||!el.isConnected)return;
+  if(gen!==generation||(!translationOpen&&annotations.mode!=='highlight')||!el.isConnected)return;
   const layer=document.createElement('div');layer.className='text-layer';layer.dataset.page=String(page);
   data.chars.forEach((c,i)=>{
    const span=document.createElement('span');span.textContent=c.text;span.dataset.char=String(i);
@@ -370,7 +389,7 @@ async function textLayer(page:number,el:HTMLElement,gen:number){
    layer.append(span);
   });
   layer.onclick=e=>{
-   const unit=$<HTMLSelectElement>('selection-unit').value;
+   const unit=annotations.mode==='highlight'?'drag':$<HTMLSelectElement>('selection-unit').value;
    const span=(e.target as HTMLElement).closest<HTMLElement>('[data-char]');
    if(unit==='drag'||!span)return;
    const [start,end]=unitRange(data.chars,Number(span.dataset.char),unit as 'sentence'|'paragraph');
@@ -387,7 +406,7 @@ function rememberSelection(page:number,text:string,range:[number,number]){
  translationControls();
 }
 document.addEventListener('selectionchange',()=>{
- if(!translationOpen)return;
+ if(!translationOpen&&annotations.mode!=='highlight')return;
  const selection=window.getSelection();if(!selection||selection.isCollapsed)return;
  const node=selection.anchorNode;const el=node instanceof Element?node:node?.parentElement;
  const layer=el?.closest<HTMLElement>('.text-layer');
@@ -471,6 +490,7 @@ function viewControls(){
  $('show-translated').setAttribute('aria-pressed',String(translatedView));
 }
 function setTranslationView(value:boolean){
+ annotations.reset();
  translatedView=value;viewControls();
  const top=$('viewport').scrollTop;layout();$('viewport').scrollTop=top;schedule();
 }
@@ -543,25 +563,33 @@ $('translation-font').onchange=updateTranslationTypography;
 $('translation-size-mode').onchange=updateTranslationTypography;
 $('translation-font-size').onchange=updateTranslationTypography;
 
-async function saveTranslatedPDF(){
- if(!doc||translating||busy||translations.size===0)return;
- const currentDoc=doc,exportFont=translationFont,exportRevision=translationRevision;
- await document.fonts.load(`12px ${translationFonts[translationFont]}`);
- if(doc!==currentDoc||translating)return;
+async function translationPayload(){
+ if(!doc)throw new Error('문서를 먼저 열어 주세요.');
+ const currentDoc=doc,font=translationFont,size=translationAutoSize?null:translationSize;
+ await document.fonts.load(`12px ${translationFonts[font]}`);
+ if(doc!==currentDoc)throw new Error('문서가 변경되었습니다. 다시 시도해 주세요.');
  const pages:{page:number;whole_page:boolean;masks:number[][];lines:(TranslationLine&{size:number;color:number[]})[]}[]=[];
  for(const [page,translated] of translations){
   const lines=[];
   for(const block of translated.blocks){
-   const layout=layoutTranslation(block.chars,block.text,doc.pages[page],translationFonts[translationFont],translationAutoSize?null:translationSize);
-   if(layout.overflow){toast(`${page+1}페이지 번역문이 영역을 넘습니다. 글자 크기를 줄이거나 자동 맞춤을 선택하세요.`);return;}
+   const layout=layoutTranslation(block.chars,block.text,currentDoc.pages[page],translationFonts[font],size);
+   if(layout.overflow)throw new Error(`${page+1}페이지 번역문이 영역을 넘습니다. 글자 크기를 줄이거나 자동 맞춤을 선택하세요.`);
    const color=(block.chars.find(c=>c.text.trim())?.color??'rgb(0,0,0)').match(/\d+/g)!.map(Number);
    lines.push(...layout.lines.filter(l=>l.text.trim()).map(l=>({...l,size:layout.size,color})));
   }
   pages.push({page,whole_page:translated.wholePage,masks:translated.blocks.flatMap(b=>b.chars.filter(c=>c.text.trim()).map(c=>c.box)),lines});
  }
+ return {font,pages};
+}
+async function saveTranslatedPDF(){
+ if(!doc||translating||busy||translations.size===0)return;
+ const currentDoc=doc,exportRevision=translationRevision;
+ let payload:Awaited<ReturnType<typeof translationPayload>>;
+ try{payload=await translationPayload();}catch(error){toast(String(error));return;}
+ if(doc!==currentDoc||translating)return;
  const path=await save({defaultPath:doc.path.replace(/\.pdf$/i,'-번역.pdf'),filters:[{name:'PDF',extensions:['pdf']}]});
  if(!path||doc!==currentDoc)return;
- await task(`번역 PDF 저장 중 · ${pages.length}페이지의 번역문을 포함합니다…`,async()=>{
-  await api({op:'save_translation',path,font:exportFont,pages});savedTranslationRevision=exportRevision;toast('번역 PDF를 저장했습니다. 원본 파일은 유지됩니다.');
+ await task(`번역 PDF 저장 중 · ${payload.pages.length}페이지의 번역문을 포함합니다…`,async()=>{
+  await api({op:'save_translation',path,...payload});savedTranslationRevision=exportRevision;toast('번역 PDF를 저장했습니다. 원본 파일은 유지됩니다.');
  });
 }

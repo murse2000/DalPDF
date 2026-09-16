@@ -1,5 +1,6 @@
 import {invoke} from '@tauri-apps/api/core';
 import {open} from '@tauri-apps/plugin-dialog';
+import {exportCard,exportOverview,type OverviewExport} from './assistant-export';
 import {sourcesFor,retrieve,checkedAnswer,checkedCards,validTerms,replaceTerm,type TextPage,type Source,type Answer,type Term,type Change} from './assistant-core';
 
 type Block={page:number;index:number;source:string;text:string;language:string};
@@ -26,12 +27,13 @@ export function createAssistant(host:Host){
  let running=false,epoch=0,tab='overview',pages:TextPage[]|null=null,terms:Term[]=[];
  let worker:Worker|null=null,workerReject:((reason:Error)=>void)|null=null;
  let preview:Correction[]=[],previewTerm:Term|null=null;
+ let overviewResult:OverviewExport|null=null,exporting=false;
  const panel=document.createElement('aside');panel.id='assistant';panel.hidden=true;
  panel.innerHTML=`<div class="inspector-head"><strong>문서 도우미</strong><button id="assistant-close" aria-label="도우미 닫기">×</button></div>
  
  <nav class="assistant-tabs" aria-label="도우미 기능"><button data-tab="overview">핵심 안내</button><button data-tab="question">문서 질문</button><button data-tab="explain">쉽게 설명</button><button data-tab="compare">문서 비교</button><button data-tab="glossary">용어집</button></nav>
  <p id="assistant-status" role="status"></p><button id="assistant-cancel" hidden>AI 작업 취소</button>
- <section data-section="overview"><button id="overview-start" class="primary">핵심 안내 만들기</button><div id="overview-results" class="ai-results"></div></section>
+ <section data-section="overview"><button id="overview-start" class="primary">핵심 안내 만들기</button><div><button id="overview-pdf" disabled>PDF 저장</button><button id="overview-md" disabled>Markdown 저장</button></div><div id="overview-results" class="ai-results"></div></section>
  <section data-section="question" hidden><form id="question-form"><label>문서에 질문하기<textarea id="question-input" rows="3" maxlength="500" placeholder="예: 이 제품의 동작 전압 범위는?" required></textarea></label><button id="question-start" class="primary">근거 찾아 답하기</button></form><div id="question-results" class="ai-results"></div></section>
  <section data-section="explain" hidden><button id="explain-select">원문에서 선택하기</button><p id="explain-selection" class="hint">선택한 내용이 없습니다.</p><button id="explain-start" class="primary">선택 내용 쉽게 설명</button><div id="explain-results" class="ai-results"></div></section>
  <section data-section="compare" hidden><p class="hint">현재 문서 → 새 버전 PDF의 텍스트 비교</p><button id="compare-start" class="primary">비교할 PDF 선택</button><p id="compare-file" class="hint"></p><div id="compare-results" class="ai-results"></div></section>
@@ -42,7 +44,8 @@ export function createAssistant(host:Host){
  $('workspace').append(panel);
  function status(value:string){$('assistant-status').textContent=value;}
  function controls(){
-  for(const id of ['overview-start','question-start','explain-start','compare-start','term-preview','term-apply'])$<HTMLButtonElement>(id).disabled=running||host.occupied();
+  for(const id of ['overview-pdf','overview-md'])$<HTMLButtonElement>(id).disabled=running||exporting||host.occupied()||!overviewResult?.cards.length;
+  for(const id of ['overview-start','question-start','explain-start','compare-start','term-preview','term-apply'])$<HTMLButtonElement>(id).disabled=running||exporting||host.occupied();
   $('assistant-cancel').hidden=!running;host.controls();
  }
  function check(job:number){if(job!==epoch)throw new Error('AI 작업을 취소했습니다.');}
@@ -88,19 +91,29 @@ export function createAssistant(host:Host){
  }
  async function overview(){await run(async job=>{
   const all=await allPages(job),sources=sourcesFor(all),container=$('overview-results');container.replaceChildren();
+  overviewResult={source_path:host.document()!.path,page_count:all.length,processed:0,total:0,complete:false,cards:[]};
   const batches:Source[][]=[];let batch:Source[]=[],size=0;
   for(const source of sources){if(size+source.text.length>3000){batches.push(batch);batch=[];size=0;}batch.push(source);size+=source.text.length;}
   if(batch.length)batches.push(batch);
+  overviewResult.total=batches.length;
   let count=0;
   for(const [i,sources] of batches.entries()){
    status(`핵심 안내 작성 중 · ${i+1} / ${batches.length}구간`);
    const cards=checkedCards(await ai('overview',{sources},job),sources);
-   for(const card of cards){container.append(answerCard(card,sources,card.title));count++;}
+   for(const card of cards){container.append(answerCard(card,sources,card.title));overviewResult.cards.push(exportCard(card,sources));count++;}
+   overviewResult.processed=i+1;
   }
   const skipped=all.filter(p=>!p.text.trim()).length;
+  overviewResult.complete=true;
   status(`전체 ${all.length}페이지 검토 완료 · ${count}개 카드${skipped?` · 텍스트 없는 ${skipped}페이지 제외`:''}`);
   if(!count)container.append(text('p','핵심 내용을 확인하지 못했습니다. 문서 질문으로 필요한 내용을 찾아보세요.'));
  });}
+ async function saveOverview(format:'pdf'|'md'){
+  if(!overviewResult?.cards.length||running||exporting||host.occupied())return;
+  const snapshot=structuredClone(overviewResult);exporting=true;controls();
+  try{if(await exportOverview(snapshot,format))host.toast(`${snapshot.complete?'핵심 안내':'완료된 일부 핵심 안내'}를 저장했습니다.`);}
+  catch(error){status(String(error));}finally{exporting=false;controls();}
+ }
  async function question(){const query=$<HTMLTextAreaElement>('question-input').value.trim();if(!query)return;await run(async job=>{
   const all=await allPages(job),sources=sourcesFor(all);status('질문의 관련 용어를 찾는 중…');
   const expansion=await ai('keywords',{question:query},job) as {keywords?:unknown};
@@ -197,6 +210,7 @@ export function createAssistant(host:Host){
  $('assistant-close').onclick=()=>{panel.hidden=true;host.hide();};
  for(const b of panel.querySelectorAll<HTMLElement>('[data-tab]'))b.onclick=()=>void show(b.dataset.tab);
  $('assistant-cancel').onclick=()=>void cancel();$('overview-start').onclick=()=>void overview();
+ $('overview-pdf').onclick=()=>void saveOverview('pdf');$('overview-md').onclick=()=>void saveOverview('md');
  $('question-form').onsubmit=e=>{e.preventDefault();void question();};$('explain-start').onclick=()=>void explain();
  $('explain-select').onclick=()=>{panel.hidden=true;host.select();};$('compare-start').onclick=()=>void compare();
  $('term-form').onsubmit=e=>{e.preventDefault();previewTermChanges();};$('term-apply').onclick=applyTerms;
@@ -204,10 +218,10 @@ export function createAssistant(host:Host){
  try{terms=validTerms(JSON.parse(localStorage.getItem('dalpdf.glossary.v1')??'[]'));}catch(e){host.toast(String(e));}renderTerms();
  return {
   show,explain:async()=>{await show('explain');await explain();},
-  get running(){return running;},
+  get running(){return running||exporting;},
   glossary:(language:string)=>terms.filter(t=>t.language===language).map(({source,target})=>({source,target})),
   close:()=>{panel.hidden=true;},
-  reset:()=>{if(running)void cancel();else epoch++;pages=null;clearPreview();for(const id of ['overview-results','question-results','explain-results','compare-results','compare-file'])$(id).replaceChildren();status('');},
+  reset:()=>{if(running)void cancel();else epoch++;pages=null;overviewResult=null;clearPreview();for(const id of ['overview-results','question-results','explain-results','compare-results','compare-file'])$(id).replaceChildren();status('');controls();},
   controls,
  };
 }
