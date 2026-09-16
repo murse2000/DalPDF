@@ -925,6 +925,20 @@ mod tests {
             std::fs::write(output, serde_json::to_vec(&result).unwrap()).unwrap();
         }
         assert!(!result["chars"].as_array().unwrap().is_empty());
+        if let Ok(input) = std::env::var("DALPDF_TRANSLATION_PAGES_FIXTURE") {
+            let pages = serde_json::from_slice(&std::fs::read(input).unwrap()).unwrap();
+            let output = std::env::var("DALPDF_EXPORT_FIXTURE").unwrap();
+            handle(
+                &pdfium,
+                &mut state,
+                Request::SaveTranslation {
+                    path: output,
+                    font: "gothic".into(),
+                    pages,
+                },
+            )
+            .unwrap();
+        }
         handle(
             &pdfium,
             &mut state,

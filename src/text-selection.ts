@@ -35,10 +35,12 @@ export function unitRange(chars: TextChar[], index: number, unit: 'sentence' | '
    const newLine=Math.abs(gap)>Math.max(c.box[3],previous.box[3])*.5;
    const height=Math.max(c.box[3],previous.box[3]);
    // 표의 옆 셀과 다른 열을 하나의 넓은 번역 영역으로 합치지 않습니다.
-   const nextCell=!newLine&&(c.box[0]-previous.box[0]-previous.box[2]>height*1.5||c.box[0]<previous.box[0]-height);
+   const nextCell=!newLine&&previous.text!=='•'&&(c.box[0]-previous.box[0]-previous.box[2]>height*1.5||c.box[0]<previous.box[0]-height);
    const nextColumn=newLine&&Math.abs(c.box[0]-left)>height*3;
    const nextStyle=newLine&&(c.color!==previous.color||Math.abs((c.size??c.box[3])/(previous.size??previous.box[3])-1)>.08);
-   if(nextCell||nextColumn||nextStyle||/\n\s*\n/.test(breaks)|| (newLine && (gap>height*1.7 || gap<0))){starts.push(i);left=c.box[0];}
+   // 다음 줄의 불릿을 앞 문단에 붙이면 번역 영역이 다음 항목과 겹칩니다.
+   const nextItem=newLine&&c.text==='•';
+   if(nextItem||nextCell||nextColumn||nextStyle||/\n\s*\n/.test(breaks)|| (newLine && (gap>height*1.7 || gap<0))){starts.push(i);left=c.box[0];}
   }
   else left=c.box[0];
   previous=c;breaks='';

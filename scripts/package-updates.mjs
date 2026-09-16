@@ -8,14 +8,16 @@ const key = environment.TAURI_SIGNING_PRIVATE_KEY;
 if (!key) throw new Error('업데이트 서명 키가 필요합니다.');
 if (fs.existsSync(key)) environment.TAURI_SIGNING_PRIVATE_KEY = fs.readFileSync(key, 'utf8');
 fs.mkdirSync('artifacts', {recursive:true});
+const light = process.argv[4] === "light";
+const suffix = light ? "-light" : "";
 let output;
 if (platform === 'macos') {
-    output = `artifacts/DalPDF-${version}-arm64.app.tar.gz`;
+    output = `artifacts/DalPDF-${version}-arm64${suffix}.app.tar.gz`;
     // 최종 앱 서명이 포함된 번들을 묶은 뒤 업데이트 서명을 생성합니다.
     const app=process.argv[3] ?? 'artifacts/DalPDF.app';
     execFileSync('tar', ['-czf', output, '-C', path.dirname(app), path.basename(app)], {env:{...environment, COPYFILE_DISABLE:'1'}});
 } else if (platform === 'windows') {
-    output = `artifacts/DalPDF-${version}-x64-setup.exe`;
+    output = `artifacts/DalPDF-${version}-x64${suffix}-setup.exe`;
     fs.copyFileSync(process.argv[3] ?? `src-tauri/target/release/bundle/nsis/DalPDF_${version}_x64-setup.exe`, output);
 } else throw new Error('macos 또는 windows를 지정하세요.');
 // 키 내용은 명령행 인자나 출력에 포함하지 않습니다.

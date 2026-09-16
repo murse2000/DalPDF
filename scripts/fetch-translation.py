@@ -44,7 +44,7 @@ with tempfile.TemporaryDirectory(prefix='dalpdf-translation-') as folder:
             file.extractall(destination, filter='data')
 if platform.startswith('windows'):
     download('https://raw.githubusercontent.com/ggml-org/llama.cpp/b10809/LICENSE', destination / 'LICENSE', '94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d')
-download('https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q3_K_S.gguf', root / 'model/model.gguf', '0ce20058cc0ed6b6c9213bb383589327e458c12ffce0842fc96867042d669c75')
+download('https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/a06e946bb6b655725eafa393f4a9745d460374c9/Qwen3-4B-Instruct-2507-Q3_K_S.gguf', root / 'model/model.gguf', (root.parent / 'model.sha256').read_text().strip())
 download('https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507/resolve/main/LICENSE', root / 'model/LICENSE')
 print('내장 번역 엔진과 모델 검증 완료:', platform)
 if platform == 'windows':

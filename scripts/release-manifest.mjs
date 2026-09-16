@@ -16,9 +16,19 @@ for (const [platform, name] of [
     if (!signature) throw new Error('업데이트 서명이 없습니다.');
     platforms[platform] = {url:`https://github.com/murse2000/DalPDF/releases/download/v${version}/${name}`, signature};
 }
+const lightweight = {model_sha256:fs.readFileSync('src-tauri/model.sha256','utf8').trim(), platforms:{}};
+for (const [platform, name] of [
+    ['darwin-aarch64', `DalPDF-${version}-arm64-light.app.tar.gz`],
+    ['windows-x86_64', `DalPDF-${version}-x64-light-setup.exe`],
+]) {
+    if (!fs.statSync(path.join(directory,name)).size) throw new Error('빈 경량 업데이트 파일입니다.');
+    const signature=fs.readFileSync(path.join(directory,name+'.sig'),'utf8').trim();
+    if (!signature) throw new Error('경량 업데이트 서명이 없습니다.');
+    lightweight.platforms[platform]={url:`https://github.com/murse2000/DalPDF/releases/download/v${version}/${name}`,signature};
+}
 const notesFile = `releases/v${version}.md`;
-const manifest = {version, notes:fs.readFileSync(notesFile,'utf8'), pub_date:new Date().toISOString(), platforms};
+const manifest = {version, notes:fs.readFileSync(notesFile,'utf8'), pub_date:new Date().toISOString(), platforms, lightweight};
 fs.writeFileSync(path.join(directory,'latest.json'), JSON.stringify(manifest,null,2)+'\n');
-const files = [`DalPDF-${version}-arm64.dmg`, `DalPDF-${version}-arm64.app.tar.gz`, `DalPDF-${version}-arm64.app.tar.gz.sig`, `DalPDF-${version}-x64-setup.exe`, `DalPDF-${version}-x64-setup.exe.sig`, 'latest.json'];
+const files = [`DalPDF-${version}-arm64.dmg`, `DalPDF-${version}-arm64.app.tar.gz`, `DalPDF-${version}-arm64.app.tar.gz.sig`, `DalPDF-${version}-x64-setup.exe`, `DalPDF-${version}-x64-setup.exe.sig`, `DalPDF-${version}-arm64-light.app.tar.gz`, `DalPDF-${version}-arm64-light.app.tar.gz.sig`, `DalPDF-${version}-x64-light-setup.exe`, `DalPDF-${version}-x64-light-setup.exe.sig`, 'latest.json'];
 fs.writeFileSync(path.join(directory,'SHA256SUMS.txt'), (await Promise.all(files.map(async name => `${await hash(path.join(directory,name))}  ${name}`))).join('\n')+'\n');
 console.log(`v${version} 업데이트 피드와 체크섬 생성 완료`);

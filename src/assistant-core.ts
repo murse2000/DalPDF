@@ -42,13 +42,28 @@ export function retrieve(sources:Source[],query:string,keywords:string[],budget=
  const lengths=counts.map(c=>[...c.values()].reduce((a,b)=>a+b,0));
  const average=lengths.reduce((a,b)=>a+b,0)/Math.max(1,sources.length);
  const frequencies=terms.map(t=>counts.filter(c=>c.has(t)).length);
- const ranked=sources.map((source,i)=>({source,score:terms.reduce((score,t,j)=>{
-  const frequency=counts[i].get(t)??0;
-  const idf=Math.log(1+(sources.length-frequencies[j]+.5)/(frequencies[j]+.5));
-  return score+idf*frequency*2.2/(frequency+1.2*(.25+.75*lengths[i]/Math.max(1,average)));
- },0)})).filter(r=>r.score>0).sort((a,b)=>b.score-a.score);
+ // 기술 용어의 구문 일치를 먼저 봅니다. 'voltage'만 반복되는 다른 표가 답의 근거를 밀어내지 않게 합니다.
+ const words=(text:string)=>text.toLowerCase().match(/[\p{L}\p{N}]+/gu)??[];
+ const phrases=[query,...keywords].map(words).filter(p=>p.length>1);
+ const ranked=sources.map((source,i)=>{
+  const text=' '+words(source.text).join(' ')+' ';
+  const match=phrases.findIndex(p=>text.includes(' '+p.join(' ')+' '));
+  const matchedTerms=match<0?terms:tokens(phrases[match].join(' '));
+  const score=terms.reduce((score,t,j)=>{
+   if(!matchedTerms.includes(t))return score;
+   const frequency=counts[i].get(t)??0;
+   const idf=Math.log(1+(sources.length-frequencies[j]+.5)/(frequencies[j]+.5));
+   return score+idf*frequency*2.2/(frequency+1.2*(.25+.75*lengths[i]/Math.max(1,average)));
+  },0);
+  return {source,phrase:match<0?0:phrases.length-match,score};
+ }).filter(r=>r.score>0).sort((a,b)=>b.phrase-a.phrase||b.score-a.score);
  const selected:Source[]=[];let size=0;
- for(const {source} of ranked){if(size+source.text.length>budget)continue;selected.push(source);size+=source.text.length;if(selected.length===5)break;}
+ // 동일 페이지의 유사한 표가 검색 슬롯을 모두 차지하지 않도록 페이지를 먼저 분산합니다.
+ for(const diverse of [true,false])for(const {source} of ranked){
+  if(selected.length===5)return selected;
+  if(selected.includes(source)||size+source.text.length>budget||diverse&&selected.some(s=>s.page===source.page))continue;
+  selected.push(source);size+=source.text.length;
+ }
  return selected;
 }
 export function checkedAnswer(value:unknown,sources:Source[]):Answer{

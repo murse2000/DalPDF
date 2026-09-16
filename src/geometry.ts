@@ -14,3 +14,17 @@ export function wheelZoom(scale: number, delta: number, mode: number, viewportHe
   const pixels = delta * (mode === 1 ? 16 : mode === 2 ? viewportHeight : 1);
   return Math.max(0.25, Math.min(3, scale * Math.exp(-Math.max(-100, Math.min(100, pixels)) * 0.002)));
 }
+
+// 가로·세로 페이지가 섞여 있어도 너비 맞춤은 각 페이지를 표시 영역에 맞춥니다.
+export function documentLayout(pages: {width: number; height: number}[], viewportWidth: number, zoom: number | null) {
+  const available = Math.max(1, viewportWidth - 72);
+  const offsets: number[] = [], widths: number[] = [], heights: number[] = [];
+  let y = 28, maxWidth = 0;
+  for (const page of pages) {
+    const scale = zoom ?? available / page.width;
+    const width = page.width * scale, height = page.height * scale;
+    offsets.push(y); widths.push(width); heights.push(height);
+    y += height + 18; maxWidth = Math.max(maxWidth, width);
+  }
+  return {offsets, widths, heights, width: Math.max(viewportWidth, maxWidth + 72), height: y + 12};
+}

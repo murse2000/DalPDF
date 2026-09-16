@@ -8,7 +8,12 @@
       "../licenses/",
       "translation/windows/",
       "translation/windows-vulkan/",
-      "translation/model/"
-    ]
+      "translation/model/LICENSE"
+    ],
+    "windows": {
+      "nsis": {
+        "installerHooks": "installer-light-hooks.nsh"
+      }
+    }
   }
 }

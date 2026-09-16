@@ -1,0 +1,83 @@
+[
+  {
+    "kind": "question",
+    "input": {
+      "question": "동작 전압은?",
+      "sources": [
+        {
+          "id": "p48s1195",
+          "page": 47,
+          "text": "characteristics \r\nSymbol Ratings Value Unit\r\nTSTG Storage temperature range -65 to +150 °C\r\nTJ Maximum junction temperature 150 °C\r\nTable 21. General operating conditions \r\nSymbol Parameter Conditions Min Max Unit\r\nfHCLK Internal AHB clock frequency - 0 64\r\nMHz\r\nfPCLK Internal APB clock frequency - 0 64\r\nVDD Standard operating voltage - 1.7(1) 3.6 V\r\nVDDA Analog supply voltage\r\nFor ADC operation ",
+          "start": 1195
+        },
+        {
+          "id": "p51s0",
+          "page": 50,
+          "text": "DS12993 Rev 4 51/128\r\nSTM32G041x6/x8 Electrical characteristics\r\n97\r\nFigure 15. VREFINT vs. temperature\r\n5.3.5 Supply current characteristics\r\nThe current consumption is a function of several parameters and factors such as the \r\noperating voltage, ambient temperature, I/O pin loading, device software configuration, \r\noperating frequencies, I/O pin switching rate, program location in memory and ",
+          "start": 0
+        },
+        {
+          "id": "p87s0",
+          "page": 86,
+          "text": "DS12993 Rev 4 87/128\r\nSTM32G041x6/x8 Electrical characteristics\r\n97\r\n5.3.19 Voltage reference buffer characteristics\r\n \r\nTable 62. VREFBUF characteristics(1)\r\nSymbol Parameter Conditions Min Typ Max Unit\r\nVDDA\r\nVREFBUF \r\noperating \r\nvoltage \r\nVRS = 0 2.4 - 3.6\r\nV\r\nVRS = 1 2.8 - 3.6\r\nVREFBUF_\r\nOUT\r\nVoltage \r\nreference output \r\nIload = \r\n100 µA\r\nT = 30 °C\r\nVRS = 0 2.038(2) 2.042 2.046\r\nV\r\nVRS = 1 ",
+          "start": 0
+        },
+        {
+          "id": "p12s395",
+          "page": 11,
+          "text": "Watchdog 2\r\nComm. interfaces\r\nSPI [I2S](1) 1[1](2) 2 [1](2)\r\nI2C 2\r\nUSART 2\r\nLPUART 1\r\nRTC Yes\r\nTamper pins 1 2\r\nRNG / AES Yes / Yes\r\nGPIOs 6 16 18 26 30 44\r\nWakeup pins 2 4\r\n12-bit ADC channels\r\n(external + internal) 6 + 2 14 + 2 15 + 2 16 + 2 16 + 3\r\nVREFBUF No Yes\r\nMax. CPU frequency 64 MHz\r\nOperating voltage 1.7 to 3.6 V\r\nOperating temperature(3) Ambient: -40 to 85 °C / -40 to 105 °C / -40 to ",
+          "start": 395
+        },
+        {
+          "id": "p17s797",
+          "page": 16,
+          "text": "power supply for the A/D converter, voltage reference buffer. VDDA\r\nvoltage level is identical to VDD voltage as it is provided externally through VDD/VDDA \r\npin.\r\n• VDDIO1 = VDD\r\nVDDIO1 is the power supply for the I/Os. VDDIO1 voltage level is identical to VDD voltage \r\nas it is provided externally through VDD/VDDA pin.\r\n• VBAT = 1.55 V to 3.6 V. VBAT is the power supply (through a power switch) ",
+          "start": 797
+        }
+      ]
+    },
+    "expected_answer_contains": [
+      "1.7",
+      "3.6"
+    ]
+  },
+  {
+    "kind": "question",
+    "input": {
+      "question": "제품 가격은 얼마야?",
+      "sources": [
+        {
+          "id": "p48s1195",
+          "page": 47,
+          "text": "characteristics \r\nSymbol Ratings Value Unit\r\nTSTG Storage temperature range -65 to +150 °C\r\nTJ Maximum junction temperature 150 °C\r\nTable 21. General operating conditions \r\nSymbol Parameter Conditions Min Max Unit\r\nfHCLK Internal AHB clock frequency - 0 64\r\nMHz\r\nfPCLK Internal APB clock frequency - 0 64\r\nVDD Standard operating voltage - 1.7(1) 3.6 V\r\nVDDA Analog supply voltage\r\nFor ADC operation ",
+          "start": 1195
+        },
+        {
+          "id": "p51s0",
+          "page": 50,
+          "text": "DS12993 Rev 4 51/128\r\nSTM32G041x6/x8 Electrical characteristics\r\n97\r\nFigure 15. VREFINT vs. temperature\r\n5.3.5 Supply current characteristics\r\nThe current consumption is a function of several parameters and factors such as the \r\noperating voltage, ambient temperature, I/O pin loading, device software configuration, \r\noperating frequencies, I/O pin switching rate, program location in memory and ",
+          "start": 0
+        },
+        {
+          "id": "p87s0",
+          "page": 86,
+          "text": "DS12993 Rev 4 87/128\r\nSTM32G041x6/x8 Electrical characteristics\r\n97\r\n5.3.19 Voltage reference buffer characteristics\r\n \r\nTable 62. VREFBUF characteristics(1)\r\nSymbol Parameter Conditions Min Typ Max Unit\r\nVDDA\r\nVREFBUF \r\noperating \r\nvoltage \r\nVRS = 0 2.4 - 3.6\r\nV\r\nVRS = 1 2.8 - 3.6\r\nVREFBUF_\r\nOUT\r\nVoltage \r\nreference output \r\nIload = \r\n100 µA\r\nT = 30 °C\r\nVRS = 0 2.038(2) 2.042 2.046\r\nV\r\nVRS = 1 ",
+          "start": 0
+        },
+        {
+          "id": "p12s395",
+          "page": 11,
+          "text": "Watchdog 2\r\nComm. interfaces\r\nSPI [I2S](1) 1[1](2) 2 [1](2)\r\nI2C 2\r\nUSART 2\r\nLPUART 1\r\nRTC Yes\r\nTamper pins 1 2\r\nRNG / AES Yes / Yes\r\nGPIOs 6 16 18 26 30 44\r\nWakeup pins 2 4\r\n12-bit ADC channels\r\n(external + internal) 6 + 2 14 + 2 15 + 2 16 + 2 16 + 3\r\nVREFBUF No Yes\r\nMax. CPU frequency 64 MHz\r\nOperating voltage 1.7 to 3.6 V\r\nOperating temperature(3) Ambient: -40 to 85 °C / -40 to 105 °C / -40 to ",
+          "start": 395
+        },
+        {
+          "id": "p17s797",
+          "page": 16,
+          "text": "power supply for the A/D converter, voltage reference buffer. VDDA\r\nvoltage level is identical to VDD voltage as it is provided externally through VDD/VDDA \r\npin.\r\n• VDDIO1 = VDD\r\nVDDIO1 is the power supply for the I/Os. VDDIO1 voltage level is identical to VDD voltage \r\nas it is provided externally through VDD/VDDA pin.\r\n• VBAT = 1.55 V to 3.6 V. VBAT is the power supply (through a power switch) ",
+          "start": 797
+        }
+      ]
+    },
+    "expected_unconfirmed": true
+  }
+]

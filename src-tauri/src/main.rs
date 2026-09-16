@@ -3,6 +3,8 @@ mod engine;
 mod acceleration;
 mod translation;
 mod updater;
+mod model_store;
+mod default_app;
 use std::sync::{mpsc, Mutex};
 #[cfg(target_os = "macos")]
 use tauri::Emitter;
@@ -42,7 +44,10 @@ fn main() {
             } else {
                 app.path().resource_dir()?
             };
-            let translator = translation::Translator::new(base.clone());
+            let cache = app.path().app_local_data_dir()?.join("models");
+            let model = model_store::model_path(&base, &cache);
+            app.manage(model_store::Store { base: base.clone(), cache });
+            let translator = translation::Translator::new(base.clone(), model);
             if cfg!(target_os = "windows") {
                 let gpu = std::fs::read(app.path().app_config_dir()?.join("gpu-acceleration.json")).ok()
                     .and_then(|bytes| serde_json::from_slice::<bool>(&bytes).ok()).unwrap_or(false);
@@ -76,6 +81,8 @@ fn main() {
             pending_file,
             updater::check_update,
             updater::install_update,
+            default_app::is_default_pdf_app,
+            default_app::set_default_pdf_app,
             translation::translate,
             translation::assist,
             translation::get_acceleration,

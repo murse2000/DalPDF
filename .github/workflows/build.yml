@@ -50,18 +50,31 @@ jobs:
           codesign --verify --deep --strict artifacts/DalPDF.app
           cp src-tauri/target/release/bundle/dmg/*.dmg "artifacts/DalPDF-$version-arm64.dmg"
           node scripts/package-updates.mjs macos
+          node scripts/prepare-light-macos.mjs
+          node scripts/package-updates.mjs macos artifacts/light/DalPDF.app light
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
       - if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          # 검사용 전체 리소스 설정을 지우고 각 빌드의 명시적 설정을 사용합니다.
+          Remove-Item Env:TAURI_CONFIG -ErrorAction SilentlyContinue
           npm run app:build -- --bundles nsis --config src-tauri/tauri.windows.conf.json
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           node scripts/package-updates.mjs windows
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          npm run app:build -- --bundles nsis --config src-tauri/tauri.windows.light.conf.json
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          node scripts/package-updates.mjs windows "src-tauri/target/release/bundle/nsis/DalPDF_$($version)_x64-setup.exe" light
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ''
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./tests/windows-installer.ps1 -MakeNsis "$env:LOCALAPPDATA\tauri\NSIS\makensis.exe"
       - uses: actions/upload-artifact@v4
         with:
           name: DalPDF-${{ runner.os }}

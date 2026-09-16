@@ -15,7 +15,7 @@ export function initializeUpdater(hooks: Hooks) {
     async function showConfirmation() {
         if (!available || installing) return;
         if (hooks.isBusy() || hooks.hasUnsaved()) { hooks.notify('작업을 마치고 편집·번역 결과를 저장한 뒤 업데이트해 주세요.'); return; }
-        if (document.querySelector('.update-dialog')) return;
+        if (document.querySelector('dialog[open]')) return;
         const selected = available;
         const dialog = document.createElement('dialog'); dialog.className = 'update-dialog';
         dialog.innerHTML = '<h2>새 버전이 있습니다</h2><p class="update-version"></p><pre class="update-notes"></pre><p>동의하면 업데이트를 다운로드하고 서명을 검증한 뒤 설치합니다. 설치 후 앱이 다시 시작됩니다.</p><p class="update-status" role="status"></p><div><button class="button" data-later>나중에</button><button class="button primary" data-install>업데이트 설치</button></div>';

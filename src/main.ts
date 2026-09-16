@@ -7,8 +7,11 @@ import './style.css';
 import {createAssistant} from './assistant';
 import {accelerationPanel} from './acceleration';
 import {initializeUpdater} from './updater';
-import { activePage, wheelZoom } from './geometry';
+import {offerDefaultPdfApp} from './default-app';
+import { activePage, wheelZoom, documentLayout } from './geometry';
 import { resizePage } from './page-view';
+import { bindImageDrag, imageDragPosition } from './object-drag';
+import { Thumbnails } from './thumbnails';
 import { layoutTranslation, type TranslationLine } from './translation-layout';
 import { textOf, translationText, unitRange, paragraphRanges, rangeBox, type TextChar, type PageText } from './text-selection';
 
@@ -19,7 +22,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const icon = (name: string) => `<i data-lucide="${name}"></i>`;
 const tool = (id: string, name: string, label: string, extra = '') => `<button id="${id}" title="${label}" ${extra}>${icon(name)}<span>${label}</span></button>`;
 let doc: Doc | null = null, current = 0, zoom = 1, fit = true, editing = false, dirty = false, busy = false, generation = 0;
-let selected: Obj | null = null, objects: Obj[] = [], objectPage = -1;
+let selected: Obj | null = null, objects: Obj[] = [], objectPage = -1, objectRotation = 'None';
 let offsets: number[] = [], widths: number[] = [], heights: number[] = [];
 const mounted = new Map<number, HTMLElement>();
 const cache = new Map<string, string>();
@@ -49,23 +52,23 @@ $('app').innerHTML = `
  <div class="side-label">페이지 도구</div>
  ${tool('split', 'scissors', 'PDF 쪼개기', 'class="nav" disabled')}
  ${tool('merge', 'combine', 'PDF 합치기', 'class="nav" disabled')}
- <div class="side-label">페이지 이동</div>
- <form id="jump-form"><input id="jump" type="number" min="1" value="1" aria-label="이동할 페이지" disabled><span id="count">/ —</span><button title="이동">${icon('arrow-right')}</button></form>
- <div id="page-list" aria-label="페이지 목록"></div>
+ <div class="side-label">페이지 미리보기</div>
+ <div id="page-list" aria-label="원문 페이지 미리보기"></div>
 
 </aside>
 <main>
- <header>${tool('sidebar-toggle','panel-left-close','사이드바 숨기기','class="icon-only" aria-expanded="true" aria-controls="sidebar"')}<div class="document-name"><span id="filename">나의 문서 공간</span><small id="filemeta">읽기부터 편집까지, 자연스럽게.</small></div><div class="header-actions">${tool('undo','undo-2','실행 취소','disabled class="icon-only"')}${tool('redo','redo-2','다시 실행','disabled class="icon-only"')}${tool('save','save','다른 이름으로 저장','disabled class="save"')}</div></header>
+ <header>${tool('sidebar-toggle','panel-left-close','사이드바 숨기기','class="icon-only" aria-expanded="true" aria-controls="sidebar"')}<div class="document-name"><span id="filename"></span><small id="filemeta"></small></div><div class="header-actions">${tool('undo','undo-2','실행 취소','disabled class="icon-only"')}${tool('redo','redo-2','다시 실행','disabled class="icon-only"')}${tool('save','save','다른 이름으로 저장','disabled class="save"')}</div></header>
  <section id="welcome"><div class="eyebrow">A LITTLE BEAR. A BETTER WORKFLOW.</div><h1>문서를 읽고,<br><em>생각을 이어가세요.</em></h1><p>가볍게 펼치고, 필요한 만큼 편집하세요.<br>PDF를 위한 조용하고 편안한 작업 공간.</p><img class="hero" src="/dalpdf-icon.png" alt="달베어 PDF"><button id="welcome-open" class="primary">${icon('plus')} PDF 열기</button><small>또는 PDF 파일을 이곳에 놓아 주세요</small><div class="features"><article>${icon('scroll-text')}<strong>자연스러운 읽기</strong><span>페이지를 이어 보는 연속 스크롤</span></article><article>${icon('text-cursor-input')}<strong>원본 내용 편집</strong><span>텍스트와 이미지 개체 수정</span></article><article>${icon('layers-2')}<strong>간편한 페이지 정리</strong><span>필요한 부분만 쪼개고 합치기</span></article></div></section>
  <div id="toolbar" hidden><form id="search-form">${icon('search')}<input id="search" placeholder="문서에서 찾기" aria-label="문서에서 찾기"><button title="다음 검색 결과">${icon('arrow-down')}</button></form><div class="zoom">${tool('zoom-out','minus','축소','class="icon-only"')}<button id="zoom-value">100%</button>${tool('zoom-in','plus','확대','class="icon-only"')}${tool('fit','scan','너비 맞춤','class="icon-only"')}</div>${tool('translate-panel','languages','번역')}${tool('assistant-panel','sparkles','문서 도우미')}<div id="translation-views" hidden><button id="show-original" aria-pressed="true">원문 보기</button><button id="show-translated" aria-pressed="false">번역문 보기</button></div><span id="mode-label">연속 스크롤</span></div>
  <div id="workspace" hidden><div id="viewport" tabindex="0" aria-label="PDF 문서"><div id="pages"></div></div><aside id="inspector" hidden><div class="inspector-head"><strong>내용 편집</strong>${tool('close-edit','x','편집 닫기','class="icon-only"')}</div><p class="hint">문서의 텍스트나 이미지를 선택하세요.</p>${tool('add-image','image-plus','이미지 추가')}<div id="object-list"></div><div id="properties"></div></aside><aside id="translation" hidden><div class="inspector-head"><strong>기기 내 번역</strong>${tool('close-translation','x','번역 닫기','class="icon-only"')}</div><p class="hint">문서에서 드래그하거나 문장·문단을 눌러 선택하세요.</p><label>선택 단위<select id="selection-unit"><option value="drag">드래그</option><option value="sentence">문장</option><option value="paragraph">문단</option></select></label><label>번역 언어<select id="translation-language"><option>한국어</option><option>English</option><option>日本語</option><option>简体中文</option></select></label>${tool('translate-selected','text-select','선택 내용 번역','disabled')}${tool('explain-selected','sparkles','선택 내용 쉽게 설명','disabled')}${tool('open-glossary','book-a','번역 용어집·교정')}${tool('translate-page','languages','현재 페이지 번역')}${tool('translate-document','files','문서 전체 번역')}${tool('translate-remaining','play','남은 페이지 이어서 번역','hidden')}${tool('save-translation','download','번역 PDF 저장','disabled')}<details id="translation-typography"><summary>번역문 글꼴·크기</summary><label>글꼴<select id="translation-font"><option value="gothic">Noto Sans KR · 고딕체</option><option value="serif">Noto Serif KR · 명조체</option></select></label><label>글자 크기<select id="translation-size-mode"><option value="auto">문단에 자동 맞춤</option><option value="manual">직접 지정</option></select></label><label>크기 (pt)<input id="translation-font-size" type="number" min="6" max="72" step="1" value="12" disabled></label></details><p id="translation-source-label" class="hint">선택한 내용이 없습니다.</p><details><summary>번역 원문</summary><pre id="translation-source"></pre></details><p id="translation-status" role="status"></p><button id="cancel-translation" hidden>번역 취소</button><details id="translation-errors" hidden><summary>번역하지 못한 페이지</summary><pre id="translation-error-list"></pre></details><pre id="translation-result" aria-label="번역 결과"></pre></aside></div>
- <footer id="statusbar"><button id="check-update">업데이트 확인</button><span id="status">문서를 열어 시작하세요.</span><span id="page-status">DalPDF · 0.1.2</span></footer>
+ <footer id="statusbar"><div class="status-left"><button id="check-update">업데이트 확인</button><span id="status">문서를 열어 시작하세요.</span></div><form id="jump-form" aria-label="페이지 이동"><button id="previous-page" type="button" title="이전 페이지" disabled>${icon('chevron-left')}</button><input id="jump" type="number" min="1" value="1" aria-label="이동할 페이지" disabled><span id="count">/ —</span><button id="next-page" type="button" title="다음 페이지" disabled>${icon('chevron-right')}</button></form><span id="page-status">DalPDF · 0.1.3</span></footer>
 </main>
 <div id="toast" role="status"></div><div id="busy" hidden><div class="spinner"></div><span id="busy-label">처리 중…</span></div><div id="drop" hidden>${icon('file-plus-2')}PDF를 놓아 주세요</div>
 <dialog id="split-dialog"><form method="dialog"><h2>PDF 쪼개기</h2><p>새 PDF로 저장할 페이지를 입력하세요.</p><label>페이지 범위<input id="range" placeholder="예: 1-3, 5, 8-10" required></label><small>입력한 순서대로 추출합니다. 원본은 유지됩니다.</small><div class="dialog-actions"><button value="cancel">취소</button><button id="extract" type="button" class="primary">추출하여 저장</button></div></form></dialog>`;
 createIcons({ icons });
 accelerationPanel(document.getElementById('translation')!);
 const api = <T>(request: Record<string, unknown>): Promise<T> => invoke<T>('pdf', { request });
+const thumbnails=new Thumbnails($('page-list'),page=>api<string>({op:'render',page,width:120}),go,()=>!drawing&&!scheduled&&!busy&&!$('app').classList.contains('sidebar-collapsed'));
 const assistant=createAssistant({
  api,document:()=>doc,selection:()=>({page:chosenPage,text:chosenText}),
  show:async()=>{if(editing)await mode(false);closeTranslation();layout();go(current);},
@@ -80,7 +83,7 @@ const assistant=createAssistant({
 });
 const checkForUpdates=initializeUpdater({isBusy:()=>busy||translating||assistant.running,hasUnsaved:()=>dirty||translationRevision!==savedTranslationRevision,setInstalling:value=>{busy=value;$('app').inert=value;},notify:message=>toast(message)});
 $('check-update').onclick=()=>void checkForUpdates(true);
-window.setTimeout(()=>void checkForUpdates(),5000);
+window.setTimeout(()=>void checkForUpdates().then(()=>offerDefaultPdfApp({isBusy:()=>busy||translating||assistant.running,notify:toast})),5000);
 window.setInterval(()=>void checkForUpdates(),6*60*60*1000);
 $('assistant-panel').onclick=()=>void assistant.show();
 $('explain-selected').onmousedown=e=>e.preventDefault();
@@ -109,7 +112,7 @@ async function task<T>(label: string, work: () => Promise<T>): Promise<T | undef
  if (busy) return;
  busy = true; $('busy').hidden = false; $('busy-label').textContent = label;
  try { return await work(); } catch (e) { toast(String(e)); return undefined; }
- finally { busy = false; $('busy').hidden = true; }
+ finally { busy = false; $('busy').hidden = true; thumbnails.schedule(); }
 }
 async function discard() { return !dirty || await ask('저장하지 않은 변경 사항이 있습니다. 변경 사항을 버리고 다른 문서를 열까요?', { title:'DalPDF', kind:'warning' }); }
 async function pickPDF(path?: string) {
@@ -118,7 +121,7 @@ async function pickPDF(path?: string) {
  if (typeof choice !== 'string') return;
  await task('PDF를 여는 중…', async () => {
   const result = await api<Doc>({op:'open',path:choice});
-  resetTranslation(); doc = result; current = 0; dirty = false; editing = false; selected = null; objectPage = -1; cache.clear();
+  resetTranslation(); doc = result; current = 0; dirty = false; editing = false; selected = null; objectPage = -1; objectRotation = 'None'; cache.clear();
   $('welcome').hidden = true; $('workspace').hidden = false; $('toolbar').hidden = false; $('inspector').hidden = true;
   $('viewport').scrollTop = 0; update(); layout(); await draw();
  });
@@ -139,23 +142,21 @@ function update() {
 }
 function pageStatus() {
  if (!doc) return;
- $<HTMLInputElement>('jump').value = String(current+1); $('page-status').textContent = `${current+1} / ${doc.pages.length} 페이지`;
- const list = $('page-list'); list.replaceChildren();
- const start = Math.max(0,current-3), end = Math.min(doc.pages.length,start+9);
- for(let i=start;i<end;i++) { const b=document.createElement('button'); b.textContent=`${i+1} 페이지`;b.className=i===current?'page-link active':'page-link';b.onclick=()=>go(i);list.append(b); }
+ if(document.activeElement!==$('jump'))$<HTMLInputElement>('jump').value=String(current+1);
+ $<HTMLButtonElement>('previous-page').disabled=current===0;$<HTMLButtonElement>('next-page').disabled=current===doc.pages.length-1;
+ $('page-status').textContent='';
+ if(widths[current])$('zoom-value').textContent=`${Math.round(widths[current]/doc.pages[current].width*100)}%`;
+ thumbnails.update(doc,current);
 }
 function layout(preserve=false) {
  if (!doc) return;
  generation++;
  if(!preserve){mounted.clear();$('pages').replaceChildren();}
- offsets=[]; widths=[]; heights=[];
- const available = Math.max(250, $('viewport').clientWidth-72);
- const base = Math.max(...doc.pages.slice(0,30).map(p=>p.width));
- const scale = fit ? available/base : zoom;
- $('zoom-value').textContent=`${Math.round(scale*100)}%`;
- let y=28, maxWidth=0;
- for(const p of doc.pages) { offsets.push(y);widths.push(p.width*scale);heights.push(p.height*scale);y+=p.height*scale+18;maxWidth=Math.max(maxWidth,p.width*scale); }
- $('pages').style.height=`${y+12}px`; $('pages').style.width=`${Math.max(available+72,maxWidth+72)}px`;
+ const dimensions = documentLayout(doc.pages, $('viewport').clientWidth, fit ? null : zoom);
+ ({offsets, widths, heights} = dimensions);
+ $('zoom-value').textContent=`${Math.round(widths[current]/doc.pages[current].width*100)}%`;
+ $('pages').style.height=`${dimensions.height}px`; $('pages').style.width=`${dimensions.width}px`;
+ if(fit)$('viewport').scrollLeft=0;
  if(preserve)for(const [n,el] of mounted)resizePage(el,offsets[n],widths[n],heights[n]);
  schedule();
 }
@@ -204,7 +205,7 @@ async function draw() {
    evidenceLayer(n,el);
    const range=visibleRange();if(n<range.first-1||n>range.last+1){schedule();break;}
   }
- }catch(e){toast(String(e));}finally{drawing=false;if(gen!==generation||redraw){redraw=false;schedule();}}
+ }catch(e){toast(String(e));}finally{drawing=false;if(gen!==generation||redraw){redraw=false;schedule();}else thumbnails.schedule();}
 }
 function go(n:number){if(!doc)return;current=Math.max(0,Math.min(doc.pages.length-1,n));$('viewport').scrollTop=offsets[current]-20;pageStatus();schedule();if(editing)void loadObjects();}
 function escapeHTML(s:string){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
@@ -214,7 +215,7 @@ async function loadObjects() {
  try{
   const result=await api<{objects:Obj[];rotation:string}>({op:'objects',page:n});
   if(n!==current||gen!==generation||!editing)return;
-  objects=result.objects;objectPage=n;selected=null;
+  objects=result.objects;objectPage=n;objectRotation=result.rotation;selected=null;
   $('properties').replaceChildren();
   $('object-list').innerHTML=`<div class="side-label">${n+1}페이지 · ${objects.length}개 개체</div>`;
   for(const o of objects){const b=document.createElement('button');b.className='object-item';b.textContent=o.kind==='text'?o.text||'텍스트':o.kind==='image'?'이미지':'그룹 개체 (읽기 전용)';b.title=o.font??o.kind;b.disabled=o.kind==='group';b.onclick=()=>select(o);$('object-list').append(b);}
@@ -226,12 +227,24 @@ function overlay(){
  for(const el of mounted.values())el.querySelector('.object-overlay')?.remove();
  const el=mounted.get(objectPage);if(!el||!editing||!doc)return;
  const layer=document.createElement('div');layer.className='object-overlay';
- for(const o of objects){if(o.kind==='group')continue;const b=document.createElement('button');b.className=`object-box ${selected?.index===o.index?'selected':''}`;b.title=o.kind==='text'?o.text??'텍스트':'이미지';b.style.cssText=`left:${100*o.display[0]}%;top:${100*o.display[1]}%;width:${100*o.display[2]}%;height:${100*o.display[3]}%`;b.onclick=()=>select(o);layer.append(b);}
+ for(const o of objects){if(o.kind==='group')continue;const b=document.createElement('button');b.className=`object-box ${selected?.index===o.index?'selected':''}`;b.title=o.kind==='text'?o.text??'텍스트':'이미지';b.style.cssText=`left:${100*o.display[0]}%;top:${100*o.display[1]}%;width:${100*o.display[2]}%;height:${100*o.display[3]}%`;b.onclick=()=>select(o);
+  if(o.kind==='image'){
+   const page=objectPage,gen=generation,rotation=objectRotation,size=doc.pages[page];
+   bindImageDrag(b,el,()=>{
+    if(busy||gen!==generation||!editing)return false;
+    select(o,false);for(const button of layer.children)button.classList.toggle('selected',button===b);return true;
+   },(dx,dy)=>{
+    if(gen!==generation||!editing)return;
+    const position=imageDragPosition(o.x,o.y,dx*size.width,dy*size.height,rotation);
+    void mutate({op:'transform',page,index:o.index,...position,width:o.width,height:o.height});
+   });
+  }
+  layer.append(b);}
  el.append(layer);
 }
-function select(o:Obj){
+function select(o:Obj,refreshOverlay=true){
  let fontPath: string | null = null;
- selected=o;overlay();
+ selected=o;if(refreshOverlay)overlay();
  $('properties').innerHTML=`<div class="side-label">${o.kind==='text'?'텍스트':'이미지'} 편집</div>${o.kind==='text'?`<label>내용<textarea id="text-value" rows="5">${escapeHTML(o.text??'')}</textarea></label><small class="hint">${escapeHTML(o.font??'원본 글꼴')} · 원본 글꼴 유지</small>${tool('font-file','type','대체 글꼴 선택 (TTF)')}${tool('apply-text','check','텍스트 적용')}`:`${tool('replace-image','image','이미지 교체')}${tool('rotate-image','rotate-cw','이미지 90° 회전')}`}
  <div class="property-grid">${[['x','X',o.x],['y','Y',o.y],['width','너비',o.width],['height','높이',o.height]].map(([id,label,value])=>`<label>${label} (pt)<input id="obj-${id}" type="number" step="0.1" value="${Number(value).toFixed(1)}"></label>`).join('')}</div>${tool('apply-bounds','move','위치·크기 적용')}
  ${o.kind==='image'&&o.pixels?`<details><summary>이미지 자르기</summary><small>원본 ${o.pixels[0]} × ${o.pixels[1]} px</small><div class="property-grid">${[['left',0],['top',0],['width',o.pixels[0]],['height',o.pixels[1]]].map(([k,v])=>`<label>${({left:"왼쪽",top:"위쪽",width:"너비",height:"높이"} as Record<string,string>)[k]} (px)<input id="crop-${k}" type="number" min="0" value="${v}"></label>`).join('')}</div>${tool('crop-image','crop','자르기 적용')}</details>`:''}
@@ -260,7 +273,7 @@ $('sidebar-toggle').onclick=()=>{
  const label=hidden?'사이드바 펼치기':'사이드바 숨기기';
  button.setAttribute('aria-expanded',String(!hidden));button.title=label;
  button.innerHTML=icon(hidden?'panel-left-open':'panel-left-close')+`<span>${label}</span>`;
- createIcons({icons});
+ createIcons({icons});if(!hidden)thumbnails.schedule();
 };
 $('open').onclick=()=>pickPDF();$('welcome-open').onclick=()=>pickPDF();$('read').onclick=()=>mode(false);$('edit').onclick=()=>mode(true);$('close-edit').onclick=()=>mode(false);
 $('save').onclick=savePDF;$('undo').onclick=()=>mutate({op:'undo'});$('redo').onclick=()=>mutate({op:'redo'});
@@ -268,7 +281,8 @@ $('add-image').onclick=()=>chooseImage();
 $('split').onclick=()=>{$<HTMLInputElement>('range').value=String(current+1);$<HTMLDialogElement>('split-dialog').showModal();};
 $('extract').onclick=async()=>{if(!doc)return;const pages=$<HTMLInputElement>('range').value;const path=await save({defaultPath:'추출.pdf',filters:[{name:'PDF',extensions:['pdf']}]});if(path){$<HTMLDialogElement>('split-dialog').close();await task('페이지를 추출하는 중…',async()=>{await api({op:'extract',pages,path});toast('선택한 페이지를 새 PDF로 저장했습니다.');});}};
 $('merge').onclick=async()=>{const paths=await open({multiple:true,filters:[{name:'PDF',extensions:['pdf']}]});if(Array.isArray(paths)&&paths.length)await mutate({op:'merge',paths});};
-$('jump-form').onsubmit=e=>{e.preventDefault();go(Number($<HTMLInputElement>('jump').value)-1);};
+$('jump-form').onsubmit=e=>{e.preventDefault();const value=Number($<HTMLInputElement>('jump').value);if(Number.isInteger(value)&&value>0){go(value-1);$<HTMLInputElement>('jump').value=String(current+1);}};
+$('previous-page').onclick=()=>go(current-1);$('next-page').onclick=()=>go(current+1);
 $('search-form').onsubmit=async e=>{e.preventDefault();await task('문서에서 찾는 중…',async()=>{const result=await api<{page:number}|null>({op:'search',query:$<HTMLInputElement>('search').value,start:current+1});if(result)go(result.page);else toast('검색 결과가 없습니다.');});};
 function scale(delta:number){if(!doc)return;const viewport=$('viewport');zoomAt(Math.max(.25,Math.min(3,widths[current]/doc.pages[current].width+delta)),viewport.clientWidth/2,viewport.clientHeight/2);}
 $('zoom-in').onclick=()=>scale(.15);$('zoom-out').onclick=()=>scale(-.15);$('fit').onclick=()=>{fit=true;layout(true);go(current);};

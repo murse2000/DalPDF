@@ -36,3 +36,27 @@ test('표의 같은 행과 다음 행에 있는 서로 다른 셀을 합치지 �
  const data=[...cell('Left cell',.1,.1),...cell('Right cell',.6,.1),...cell('Next left',.1,.13),...cell('Next right',.6,.13)];
  assert.deepEqual(paragraphRanges(data).map(([s,e])=>textOf(data.slice(s,e))),['Left cell','Right cell','Next left','Next right']);
 });
+
+test('불릿 들여쓰기를 표 셀로 분리하지 않고 다음 항목의 영역을 침범하지 않는다',async()=>{
+ const {paragraphRanges,rangeBox}=await import('../src/text-selection.ts');
+ // STM32G041 데이터시트 16페이지의 USART/I²C 목록과 같은 좌표 관계입니다.
+ const data=[
+  {text:'interfaces:',size:10,box:[.244,.408,.36,.0132]},
+  {text:'\r\n',box:[.611,.418,0,0]},
+  {text:'•',size:10,box:[.208,.4241,.0077,.0154]},
+  {text:' ',box:[.209,.436,0,0]},
+  {text:'USART on pins PA9/PA10 or PA2/PA3',size:10,box:[.244,.4253,.285,.0132]},
+  {text:'\r\n',box:[.521,.436,0,0]},
+  {text:'•',size:10,box:[.208,.4419,.0077,.0154]},
+  {text:' ',box:[.209,.454,0,0]},
+  {text:'I',size:10,box:[.244,.4431,.0047,.0132]},
+  {text:'\r\n',box:[.245,.454,0,0]},
+  {text:'2',size:8,box:[.2488,.4405,.0075,.0106]},
+  {text:'C-bus on pins PB6/PB7 or PB10/PB11',size:10,box:[.2563,.4431,.32,.0132]},
+ ];
+ const blocks=paragraphRanges(data).map(([start,end])=>data.slice(start,end));
+ assert.deepEqual(blocks.map(b=>translationText(b).trim()),['interfaces:','• USART on pins PA9/PA10 or PA2/PA3','• I2C-bus on pins PB6/PB7 or PB10/PB11']);
+ const boxes=blocks.map(rangeBox);
+ for(let i=1;i<boxes.length;i++)assert.ok(boxes[i-1][1]+boxes[i-1][3]<=boxes[i][1]);
+ assert.equal(blocks.flat().length,data.length);
+});

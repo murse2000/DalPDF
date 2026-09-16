@@ -13,6 +13,25 @@ test('한국어 질문의 영어 검색어를 이용해 긴 문서의 관련 구
  assert.equal(retrieve(sources,'동작 전압 범위는?',['operating','voltage','range'])[0].page,67);
  assert.deepEqual(retrieve(sources,'존재하지않는검색어',[]),[]);
 });
+test('동작 전압 질문은 개별 단어가 반복된 입출력 표보다 정확한 구문을 우선한다',()=>{
+ const sources=sourcesFor([
+  {page:11,text:'Watchdog 2. Communication interfaces. GPIOs and ADC channels. '.repeat(4)+'Operating voltage 1.7 to 3.6 V'},
+  {page:75,text:'Output low level voltage. Output high level voltage. '.repeat(7)},
+  {page:61,text:'level voltage - 0.7 VDDIO1 -VDDIO1 V'},
+  {page:77,text:'NRST input low level voltage. NRST input high level voltage.'},
+  ...Array.from({length:30},(_,i)=>({page:100+i,text:'General operating conditions. Supply voltage. Ambient temperature.'})),
+ ]);
+ const result=retrieve(sources,'동작 전압은?',['작동 전압','operating voltage','전압','voltage','전압 수준','voltage level']);
+ assert.equal(result[0].page,11);
+});
+test('한 페이지의 반복 표가 다른 페이지의 근거를 검색 결과에서 밀어내지 않는다',()=>{
+ const sources=[...Array.from({length:6},(_,i)=>({id:`p1s${i}`,page:0,start:i,text:'Operating voltage. Operating voltage. Operating voltage.'})),
+  {id:'p12s0',page:11,start:0,text:'Device features. Operating voltage 1.7 to 3.6 V.'}];
+ const found=retrieve(sources,'동작 전압은?',['operating voltage']);
+ assert.ok(found.slice(0,2).some(s=>s.page===11));
+ assert.equal(new Set(found.map(s=>s.id)).size,found.length);
+ assert.ok(found.reduce((n,s)=>n+s.text.length,0)<=3500);
+});
 test('출처가 없거나 변조된 인용을 답변 근거로 허용하지 않는다',()=>{
  const sources=[{id:'p1',page:0,start:0,text:'Voltage is 3.3 V.\r\nCurrent is 20 mA.'}];
  assert.throws(()=>checkedAnswer({answer:'5V',citations:[{id:'p1',quote:'Voltage is 5 V.'}]},sources));
