@@ -118,7 +118,7 @@ mod tests {
         page.objects_mut().add_path_object(PdfPagePathObject::new_rect(&document,PdfRect::new_from_values(0.,0.,60.,50.),None,None,Some(PdfColor::new(255,0,0,255))).unwrap()).unwrap();
         for area in [(100,60),(60,100)]{
             let position=placement((100.,60.),area,(72,72)).unwrap();let bytes=raster(&page,&position).unwrap();
-            let red=bytes.chunks_exact(4).filter(|p|p[0]<10&&p[1]<10&&p[2]>245).count();
+            let red=bytes.as_chunks::<4>().0.iter().filter(|p|p[0]<10&&p[1]<10&&p[2]>245).count();
             let fraction=red as f64/(bytes.len()/4) as f64;assert!((0.45..0.55).contains(&fraction));
             assert_eq!(position.rotate,area.0<area.1);
         }
