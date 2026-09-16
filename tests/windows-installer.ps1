@@ -96,7 +96,9 @@ try {
     if ((Read-PdfDefault) -ne $defaultBefore) { throw '사용자 동의 없이 기본 PDF 앱을 변경했습니다.' }
     $uninstaller = Start-Process (Join-Path $registeredInstall 'uninstall.exe') -ArgumentList @('/S', "_?=$registeredInstall") -PassThru
     Complete-Installer $uninstaller $true
-    if ((Test-Path $progId) -or (Test-Path $capabilities) -or (Get-ItemPropertyValue $registered DalPDF -ErrorAction SilentlyContinue)) { throw '앱 제거 후 기본 앱 후보 등록이 남았습니다.' }
+    $remainingRegistered = Get-Item $registered -ErrorAction SilentlyContinue
+    if ((Test-Path $progId) -or (Test-Path $capabilities) -or
+        ($remainingRegistered -and ($remainingRegistered.GetValueNames() -contains 'DalPDF'))) { throw '앱 제거 후 기본 앱 후보 등록이 남았습니다.' }
     if ((Get-Item $openWith).GetValueNames() -contains 'DalPDF.PDF') { throw '앱 제거 후 연결 프로그램 후보가 남았습니다.' }
     if ((Read-PdfDefault) -ne $defaultBefore) { throw '앱 제거가 기본 PDF 앱을 변경했습니다.' }
   } finally {
