@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "app:dev": "tauri dev --no-default-features",
     "app:build": "tauri build",
-    "test": "node --test tests/*.test.mjs && cargo test --manifest-path src-tauri/Cargo.toml -- --test-threads=1 && vitest run tests/page-view.test.ts tests/translation-layout.test.ts tests/thumbnails.test.ts tests/annotations.test.ts tests/assistant-export.test.ts tests/printing.test.ts",
+    "test": "node --test tests/*.test.mjs && cargo test --manifest-path src-tauri/Cargo.toml -- --test-threads=1 && vitest run tests/page-view.test.ts tests/translation-layout.test.ts tests/thumbnails.test.ts tests/annotations.test.ts tests/assistant-export.test.ts tests/printing.test.ts tests/edit-selection.test.ts",
     "check": "npm run build && cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
     "test:updater": "vitest run tests/updater.test.ts tests/default-app.test.ts"
   },

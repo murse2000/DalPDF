@@ -223,10 +223,11 @@ function go(n:number){if(!doc)return;current=Math.max(0,Math.min(doc.pages.lengt
 function escapeHTML(s:string){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
 async function loadObjects() {
  if(!doc||!editing)return;
- const n=current,gen=generation;
+ const n=current,currentDoc=doc;
  try{
   const result=await api<{objects:Obj[];rotation:string}>({op:'objects',page:n});
-  if(n!==current||gen!==generation||!editing)return;
+  // 개체 좌표는 화면 배율과 무관하므로 문서·페이지·편집 모드가 바뀐 응답만 버립니다.
+  if(n!==current||currentDoc!==doc||!editing)return;
   objects=result.objects;objectPage=n;objectRotation=result.rotation;selected=null;
   $('properties').replaceChildren();
   $('object-list').innerHTML=`<div class="side-label">${n+1}페이지 · ${objects.length}개 개체</div>`;
