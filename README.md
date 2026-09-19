@@ -32,8 +32,8 @@ DalZip의 곰·초승달 브랜드와 남색 유리 질감을 적용한 Windows/
 ## 실행 파일
 
 - `artifacts/DalPDF.app`: macOS Apple Silicon 실행 앱
-- `artifacts/DalPDF-0.1.3-arm64.dmg`: macOS 설치 이미지
-- `artifacts/DalPDF-0.1.3-x64-setup.exe`: Windows x64 설치 파일
+- `artifacts/DalPDF-0.1.4-arm64.dmg`: macOS 설치 이미지
+- `artifacts/DalPDF-0.1.4-x64-setup.exe`: Windows x64 설치 파일
 - `artifacts/SHA256SUMS`: 설치 파일 해시
 
 자동 업데이트는 사용자가 설치를 선택한 뒤 모델의 SHA256을 확인합니다. 릴리즈의 모델과 같으면 모델을 사용자 데이터 폴더에 보존하고 모델이 빠진 경량 업데이트를 받습니다. 모델이 달라지거나 보존·검증에 실패하면 전체 설치 파일을 받습니다. 최초 설치 파일에는 모델이 포함되며, `-light` 파일은 앱 내부 업데이트 전용입니다. 이 기능이 없는 0.1.2 이하에서 새 버전으로 처음 이동할 때에는 전체 업데이트가 한 번 필요합니다. 경량 파일도 전체 파일과 같은 공개키로 서명을 검증합니다.

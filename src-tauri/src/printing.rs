@@ -14,8 +14,8 @@ pub async fn print_document(app:tauri::AppHandle,request:Request,state:tauri::St
     let sender=state.0.clone();
     tauri::async_runtime::spawn_blocking(move||{
         // 저장 경로와 미저장 편집 상태를 바꾸지 않는 인쇄 전용 사본을 유지합니다.
-        let temporary=tempfile::Builder::new().prefix("dalpdf-print-").suffix(".pdf").tempfile().map_err(|e|e.to_string())?;
-        let path=temporary.path().to_path_buf();
+        let temporary=temporary_pdf()?;
+        let path=temporary.to_path_buf();
         let snapshot=match request.translation {
             Some(value)=>crate::engine::Request::SaveTranslation {path:path.to_string_lossy().into(),font:value.font,pages:value.pages},
             None=>crate::engine::Request::PrintSnapshot {path:path.to_string_lossy().into()},
@@ -25,6 +25,11 @@ pub async fn print_document(app:tauri::AppHandle,request:Request,state:tauri::St
         rx.recv().map_err(|_|"인쇄 사본 응답을 받지 못했습니다.".to_string())??;
         platform_print(app,sender,path,request.current_page)
     }).await.map_err(|e|e.to_string())?
+}
+
+fn temporary_pdf()->Result<tempfile::TempPath,String>{
+    // Windows에서 완성된 PDF로 교체할 수 있도록 핸들은 닫고, 인쇄가 끝날 때까지 경로만 유지합니다.
+    Ok(tempfile::Builder::new().prefix("dalpdf-print-").suffix(".pdf").tempfile().map_err(|e|e.to_string())?.into_temp_path())
 }
 
 #[cfg(target_os="macos")]
@@ -97,6 +102,45 @@ pub fn raster(page:&pdfium_render::prelude::PdfPage,position:&Placement)->Result
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn print_temporary_pdf_supports_atomic_original_and_translation_save(){
+        use crate::engine::{self,Request,TranslationPage,TranslationLine};
+        let pdfium=engine::test_pdfium();
+        let directory=tempfile::tempdir().unwrap();
+        let source=directory.path().join("source.pdf");
+        std::fs::copy(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../tests/assistant-before.pdf"),&source).unwrap();
+        let original=std::fs::read(&source).unwrap();
+        let mut session=None;
+        engine::handle(&pdfium,&mut session,Request::Open{path:source.to_string_lossy().into(),password:None}).unwrap();
+        engine::handle(&pdfium,&mut session,Request::AddNote{page:0,x:0.2,y:0.2,text:"인쇄 메모".into()}).unwrap();
+        let before=engine::handle(&pdfium,&mut session,Request::Info).unwrap();
+        #[cfg(target_os="windows")]
+        {
+            // 수정 전처럼 대상 파일을 열어 두면 실제 Windows에서 교체가 거부됩니다.
+            let locked=tempfile::NamedTempFile::new().unwrap();
+            let error=engine::handle(&pdfium,&mut session,Request::PrintSnapshot{path:locked.path().to_string_lossy().into()}).unwrap_err();
+            assert!(error.contains("failed to persist temporary file")&&error.contains("os error 5"),"{error}");
+        }
+        for translated in [false,true]{
+            let temporary=temporary_pdf().unwrap();let path=temporary.to_path_buf();
+            let request=if translated {Request::SaveTranslation{path:path.to_string_lossy().into(),font:"gothic".into(),pages:vec![TranslationPage{
+                page:0,whole_page:true,masks:vec![],lines:vec![TranslationLine{text:"인쇄 번역문".into(),x:55.,y:100.,width:300.,size:16.,color:[0,0,0]}],
+            }]}} else {Request::PrintSnapshot{path:path.to_string_lossy().into()}};
+            engine::handle(&pdfium,&mut session,request).unwrap();
+            {
+                let saved=pdfium.load_pdf_from_file(&path,None).unwrap();
+                assert_eq!(saved.pages().len(),session.as_ref().unwrap().doc.pages().len());
+                if translated {assert!(saved.pages().get(0).unwrap().text().unwrap().all().contains("인쇄 번역문"));}
+            }
+            assert_eq!(engine::handle(&pdfium,&mut session,Request::Info).unwrap(),before);
+            drop(temporary);assert!(!path.exists());
+        }
+        let temporary=temporary_pdf().unwrap();let path=temporary.to_path_buf();
+        let mut empty=None;
+        assert!(engine::handle(&pdfium,&mut empty,Request::PrintSnapshot{path:path.to_string_lossy().into()}).is_err());
+        drop(temporary);assert!(!path.exists());
+        assert_eq!(std::fs::read(source).unwrap(),original);
+    }
     #[test]
     fn page_selection_matches_all_current_and_multiple_ranges(){
         assert_eq!(selected_pages(8,3,None,false).unwrap(),(0..8).collect::<Vec<_>>());

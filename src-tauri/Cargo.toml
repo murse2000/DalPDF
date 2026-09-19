@@ -1,6 +1,6 @@
 [package]
 name = "dalpdf"
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 description = "달베어 PDF 뷰어 및 편집기"
 [build-dependencies]
