@@ -12,7 +12,11 @@ vi.mock('../src/updater',()=>({initializeUpdater:()=>vi.fn(async()=>{})}));
 vi.mock('../src/default-app',()=>({offerDefaultPdfApp:vi.fn()}));
 vi.mock('../src/annotations',()=>({annotationTools:()=>({mode:null,reset:vi.fn(),resetDocument:vi.fn(),layer:vi.fn(async()=>{})})}));
 vi.mock('../src/thumbnails',()=>({Thumbnails:class{update(){}schedule(){}}}));
-afterEach(()=>{vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllGlobals();document.body.replaceChildren();});
+const imageDecode=Object.getOwnPropertyDescriptor(HTMLImageElement.prototype,'decode');
+afterEach(()=>{
+ vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllGlobals();document.body.replaceChildren();
+ if(imageDecode)Object.defineProperty(HTMLImageElement.prototype,'decode',imageDecode);else Reflect.deleteProperty(HTMLImageElement.prototype,'decode');
+});
 
 test.each(['resize','document','read'])('늦은 개체 응답을 문서 상태에 따라 처리한다: %s',async(scenario)=>{
  vi.resetModules();native.invoke.mockReset();
